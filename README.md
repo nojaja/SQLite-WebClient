@@ -1,7 +1,7 @@
-# site-template
+# SQLite-Sample
 
 [![Licence](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE) 
-
+SQLite working on browser Sample
 
 ## Feature
 * 
