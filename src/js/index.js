@@ -18,8 +18,7 @@ class SQLiteManager {
     this.db = new sqlite3.Database();
   }
 
-  exec(sql) {
-    console.log(this.db)
+  exec(sql,bind) {
     return this.db.exec(sql);
   }
 
