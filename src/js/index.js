@@ -1,128 +1,68 @@
-//View///////////////////////////////////////////////////
-document.addEventListener("DOMContentLoaded", function () {
-  // Handler when the DOM is fully loaded
-  let container = document.querySelector(".container")
-  if (container) {
-    console.log(container);
-  }
-});
-
-window.addEventListener('load', (event) => {
-  let container = document.querySelector(".container")
-  if (container) {
-    console.log(container);
-    exec();
-  }
-});
-
 import initSqlJs from "sql.js";
-const config = {
-  // Required to load the wasm binary asynchronously. Of course, you can host it wherever you want
-  // You can omit locateFile completely when running in node
-  //locateFile: file => `https://sql.js.org/dist/${file}`
-  //locateFile: filename => `/dist/${filename}`
-  locateFile: file => './sql-wasm.wasm'
+
+class SQLiteManager {
+  static async initialize() {
+    const config = {
+      // Required to load the wasm binary asynchronously. Of course, you can host it wherever you want
+      // You can omit locateFile completely when running in node
+      //locateFile: file => `https://sql.js.org/dist/${file}`
+      //locateFile: filename => `/dist/${filename}`
+      locateFile: file => './sql-wasm.wasm'
+    }
+    const sqlite3 = await initSqlJs(config);
+    return new SQLiteManager(sqlite3);
+  }
+
+  constructor(sqlite3) {
+    this.sqlite3 = sqlite3;
+    this.db = new sqlite3.Database();
+  }
+
+  exec(sql) {
+    console.log(this.db)
+    return this.db.exec(sql);
+  }
+
+  export() {
+    return this.db.export();
+  }
+
+  async import(contents) {
+    this.db.close();
+    this.db = new this.sqlite3.Database(contents);
+  }
 }
 
-let db;
-initSqlJs(config).then(function (SQL) {
-  //Create the database
-  db = new SQL.Database()
-})
-
-/**
- * Saves a file by creating a downloadable instance, and clicking on the
- * download link.
- *
- * @param {string} filename Filename to save the file as.
- * @param {arrayBuffer} contents Contents of the file to save.
- */
-// function saveAsLegacy(filename, contents) {
-function saveAsLegacy(filename, contents) {
-  let atag = document.createElement('a')
-  atag.id = "aDownloadFile"
-  atag.download = true
-
-  filename = filename || 'Untitled.db';
-  const opts = { type: 'application/sqlite.db' };
-  const file = new File([contents], '', opts);
-  atag.href = window.URL.createObjectURL(file);
-  atag.setAttribute('download', filename);
-  atag.click();
-};
-
-let dataexport = function () {
-  saveAsLegacy('Untitled.db', db.export())
-}
-
-/**
- * Uses the <input type="file"> to open a new file
- *
- * @return {!Promise<File>} File selected by the user.
- */
-function getFileLegacy() {
-  let inputtag = document.createElement('input')
-  inputtag.id = "filePicker"
-  inputtag.type = "file"
-  //document.body.appendChild(inputtag)
-
-  return new Promise((resolve, reject) => {
-    inputtag.onchange = (e) => {
-      const file = inputtag.files[0];
-      if (file) {
-        resolve(file);
-        return;
-      }
-      reject(new Error('AbortError'));
-    };
-    inputtag.click();
-  });
-};
-
-/**
- * Reads the raw text from a file.
- *
- * @private
- * @param {File} file
- * @return {Promise<string>} A promise that resolves to the parsed string.
- */
-function readFileLegacy(file) {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.addEventListener('loadend', (e) => {
-      const content = e.srcElement.result;
-      resolve(content);
-    });
-    reader.readAsBinaryString(file);
-  });
-}
-let dataimport = function () {
-  initSqlJs(config).then(async function (SQL) {
-    // Load the db
-    const filebuffer = await getFileLegacy()
-    const contents = await readFileLegacy(filebuffer);
-    db = new SQL.Database(contents)
-  });
-}
+// メインの処理
+document.addEventListener("DOMContentLoaded", async function () {
+  try {
+    // SQLite WAMSの初期化
+    window.sqliteManager = await SQLiteManager.initialize();
+    console.log("SQLite WAMS initialized");
+  } catch (error) {
+    console.error("Failed to initialize SQLite WAMS:", error);
+  }
+});
 
 
-let exec = function () {
-  const sqls = document.getElementById("sql").value.replace(/\n/g, "").split(";");
-  sqls.forEach(function (sql, index, ar) {
-    if (sql) {
-      console.log(sql);
-      addResult('sql    > ' + sql);
-      let res;
+// execute ボタンのイベントハンドラ
+document.getElementById("exec").onclick = function () {
+  const sqlStatements = document.getElementById("sql").value.split(";");
+
+  sqlStatements.forEach(sql => {
+    if (sql.trim()) {
       try {
-        res = db.exec(sql);
-        console.log(res);
-        res.forEach(function (result, index, ar) {
+        console.log(sql);
+        addResult('sql    > ' + sql);
+        const result = window.sqliteManager.exec(sql);
+        console.log(result);
+        result.forEach(result => {
           console.log(result);
           if (result.columns) {
-            addResult('result.columns> ' + result.columns);
+            addResult('result.columns> ' + result.columns.join(', '));
           }
-          result.values.forEach(function (value, index, ar) {
-            addResult('result.value> ' + value);
+          result.values.forEach(row => {
+            addResult('result.values> ' + row.join(', '));
           });
         });
       } catch (error) {
@@ -133,12 +73,81 @@ let exec = function () {
   });
 }
 
+// データエクスポートのイベントハンドラ
+document.getElementById("dataexport").onclick = function () {
+  const data = window.sqliteManager.export();
+  saveFile('Untitled.db', data)
+}
+
+// データインポートのイベントハンドラ
+document.getElementById("dataimport").onclick = async function () {
+  const file = await getFile();
+  if (file) {
+    const arrayBuffer = await readFileAsArrayBuffer(file);
+    try {
+      await window.sqliteManager.import(arrayBuffer);
+      addResult('Import completed successfully');
+    } catch (error) {
+      addResult('Import error: ' + error.message);
+    }
+  }
+}
+
+// ヘルパー関数
 function addResult(data) {
-  var code = document.createElement("li");
-  code.innerHTML = JSON.stringify(data);
+  const code = document.createElement("li");
+  code.textContent = data;
   document.getElementById("output").appendChild(code);
 }
 
-document.getElementById("exec").onclick = exec
-document.getElementById("dataexport").onclick = dataexport
-document.getElementById("dataimport").onclick = dataimport
+/**
+ * Saves a file by creating a downloadable instance, and clicking on the
+ * download link.
+ *
+ * @param {string} filename Filename to save the file as.
+ * @param {arrayBuffer} contents Contents of the file to save.
+ */
+function saveFile(filename, contents) {
+  const blob = new Blob([contents], { type: 'application/sqlite.db' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+
+/**
+ * Uses the <input type="file"> to open a new file
+ *
+ * @return {!Promise<File>} File selected by the user.
+ */
+async function getFile() {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.onchange = () => {
+      resolve(input.files[0]);
+    };
+    input.click();
+  });
+}
+
+/**
+ * Reads the raw text from a file.
+ *
+ * @private
+ * @param {File} file
+ * @return {Promise<string>} A promise that resolves to the parsed string.
+ */
+async function readFileAsArrayBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+

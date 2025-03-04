@@ -3,21 +3,38 @@
 
 <head>
   <meta charset="UTF-8" />
-  <title></title>
+  <title>SQL.js WASM Sample</title>
+  <style>
+    textarea {
+      width: 100%;
+      margin-bottom: 10px;
+    }
+    button {
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+    #output {
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+  </style>
 </head>
-
 <body>
-<header>
-  <textarea id="sql" cols=80 rows=6>
-    CREATE TABLE test (col1, col2);
-    INSERT INTO test VALUES (1, 111);
-    INSERT INTO test VALUES (2, 222);
-    SELECT * FROM test;
+  <header>
+    <h1>SQL.js WASM Sample</h1>
+    <textarea id="sql" cols="80" rows="6">
+SELECT sqlite_version();
+CREATE TABLE test (col1, col2);
+INSERT INTO test VALUES (1, 111);
+INSERT INTO test VALUES (2, 222);
+SELECT * FROM test;
     </textarea>
-    <button id="exec" >execute</button>
-    <button id="dataexport" >dataexport</button>
-    <button id="dataimport" >dataimport</button>
+    <div>
+      <button id="exec">execute</button>
+      <button id="dataexport">dataexport</button>
+      <button id="dataimport">dataimport</button>
+    </div>
     <ol id="output"></ol>
+  </header>
 </body>
-
 </html>

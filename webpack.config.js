@@ -1,96 +1,49 @@
-const path = require('path')
-const src = __dirname + "/src"
-const dist = __dirname + "/docs"
-const webpack = require('webpack')
-const HtmlWebpackPlugin = require('html-webpack-plugin')
-const CopyFilePlugin = require('copy-webpack-plugin')
-const WriteFilePlugin = require('write-file-webpack-plugin')
-const HardSourceWebpackPlugin = require('hard-source-webpack-plugin')
+const path = require('path');
+const CopyPlugin = require('copy-webpack-plugin');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
-  mode: process.env.NODE_ENV === 'production' ? 'development' : 'production',
-  devtool: 'source-map',
+  devtool: 'inline-source-map',
   devServer: {
-    disableHostCheck: true,
-    contentBase: dist,
-    public: process.env.URL || ''
+    static: {
+      directory: path.join(__dirname, 'docs'),
+    },
+    compress: true
   },
-  context: src,
-  entry: {
-    'main': './js/index.js'
-  },
+  entry: './src/js/index.js',
   output: {
-		globalObject: 'self',
     filename: './[name].bundle.js',
     sourceMapFilename: './map/[id].[chunkhash].js.map',
     chunkFilename: './chunk/[id].[chunkhash].js',
-    path: dist,
-    publicPath:""
+    path: path.resolve(__dirname, 'docs')
   },
   resolve: {
-    alias: {
-      '@': path.resolve(src, '/js/')
+    fallback: {
+      "crypto": require.resolve("crypto-browserify"),
+      "path": require.resolve("path-browserify"),
+      "vm": require.resolve("vm-browserify"),
+      "buffer": require.resolve("buffer/"),
+      "stream": require.resolve("stream-browserify"),
+      "fs": false
     }
-  },
-  module: {
-    rules: [{
-      test: /\.css$/,
-      use: ['style-loader', 'css-loader']
-    }, {
-      test: /\.(woff|woff2|eot|ttf|svg)$/,
-      use: ['file-loader']
-    }
-  ]
-  },
-  node: {
-    fs: 'empty'
   },
   plugins: [
-    new HardSourceWebpackPlugin(),
-    new webpack.ProvidePlugin({
-      $: 'jquery',
-      jQuery: 'jquery',
-      'window.jQuery': 'jquery'
-    }),
     new HtmlWebpackPlugin({
       inject: true,
       chunks: ['main'],
-      template: './html/index.html',
-      filename: './index.html'
+      template: 'src/html/index.html',
+      filename: 'index.html'
     }),
-    new CopyFilePlugin(
-        [
-            { from: '../node_modules/sql.js/dist/sql-wasm.wasm', to: dist },
-            {
-              context: 'assets/',
-              from: '*.json',
-              to: dist
-            },
-            {
-              context: 'assets/',
-              from: '_locales/**/*.*',
-              to: dist
-            },
-            {
-              context: 'assets/',
-              from: 'icons/*.*',
-              to: dist
-            },
-            {
-                from: 'css/*.css',
-                to: dist
-            },
-            {
-                from: 'assets/*/*.*',
-                to: dist
-            },
-            {
-                from: 'assets/*.*',
-                to: dist
-            }
-        ],
-        { copyUnmodified: true }
-    ),
-    new WriteFilePlugin()
-  ]
-}
+    new CopyPlugin({
+      patterns: [
+        {
+          from: 'node_modules/sql.js/dist/sql-wasm.wasm',
+          to: './',
+          globOptions: {
+            ignore: ['**/*.js', '**/*.mjs'],
+          }
+        }
+      ],
+    }),
+  ],
+};
