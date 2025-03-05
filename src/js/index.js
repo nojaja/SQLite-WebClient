@@ -1,34 +1,69 @@
-import initSqlJs from "sql.js";
+import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
 
 class SQLiteManager {
   static async initialize() {
-    const config = {
-      // Required to load the wasm binary asynchronously. Of course, you can host it wherever you want
-      // You can omit locateFile completely when running in node
-      //locateFile: file => `https://sql.js.org/dist/${file}`
-      //locateFile: filename => `/dist/${filename}`
-      locateFile: file => './sql-wasm.wasm'
-    }
-    const sqlite3 = await initSqlJs(config);
+    const sqlite3 = await sqlite3InitModule({
+      print: console.log,
+      printErr: console.error
+    });
     return new SQLiteManager(sqlite3);
   }
 
   constructor(sqlite3) {
     this.sqlite3 = sqlite3;
-    this.db = new sqlite3.Database();
+    const filename = "dbfile_" + (0xffffffff * Math.random() >>> 0);
+    this.db = new sqlite3.oo1.DB(filename, "ct");
   }
 
   exec(sql,bind) {
-    return this.db.exec(sql);
+    const results = [];
+    let columnNames = [];
+    try {
+      this.db.exec({
+        sql: sql,
+        bind: bind,
+        rowMode: 'object',
+        callback: (row) => {
+          columnNames = Array.from(new Set([...columnNames, ...Object.keys(row)]));
+          results.push(Object.values(row));
+        }
+      });
+      return {
+        columns: columnNames,
+        values: results
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  getColumnNames() {
+    const stmt = this.db.prepare("SELECT * FROM sqlite_master LIMIT 1");
+    try {
+      const columnInfo = stmt.getColumnNames();
+      return columnInfo;
+    } finally {
+      stmt.finalize();
+    }
   }
 
   export() {
-    return this.db.export();
+    const exportedData = this.sqlite3.capi.sqlite3_js_db_export(this.db);
+    console.log(exportedData)
+    return exportedData;
   }
 
   async import(contents) {
     this.db.close();
-    this.db = new this.sqlite3.Database(contents);
+    const vfsName = 'unix'; // 使用するVFSの名前
+    const filename = "dbfile_" + (0xffffffff * Math.random() >>> 0);
+
+    this.sqlite3.capi.sqlite3_js_vfs_create_file(vfsName, filename, contents, contents.length); 
+    this.db = new this.sqlite3.oo1.DB(filename);
+  }
+
+  close() {
+    this.db.close();
   }
 }
 
@@ -43,11 +78,10 @@ document.addEventListener("DOMContentLoaded", async function () {
   }
 });
 
-
 // execute ボタンのイベントハンドラ
 document.getElementById("exec").onclick = function () {
-  const sqlStatements = document.getElementById("sql").value.split(";");
-
+  const sqlStatements = document.getElementById("sql").value.split(';');
+  
   sqlStatements.forEach(sql => {
     if (sql.trim()) {
       try {
@@ -55,28 +89,25 @@ document.getElementById("exec").onclick = function () {
         addResult('sql    > ' + sql);
         const result = window.sqliteManager.exec(sql);
         console.log(result);
-        result.forEach(result => {
-          console.log(result);
-          if (result.columns) {
-            addResult('result.columns> ' + result.columns.join(', '));
-          }
+        if (result && result.values.length > 0) {
+          addResult('result.columns> ' + result.columns.join(', '));
           result.values.forEach(row => {
             addResult('result.values> ' + row.join(', '));
           });
-        });
+        }
       } catch (error) {
-        console.log(error);
-        addResult('error > ' + error.message);
+        console.error(error);
+        addResult('error  > ' + error.message);
       }
     }
   });
-}
+};
 
 // データエクスポートのイベントハンドラ
 document.getElementById("dataexport").onclick = function () {
   const data = window.sqliteManager.export();
   saveFile('Untitled.db', data)
-}
+};
 
 // データインポートのイベントハンドラ
 document.getElementById("dataimport").onclick = async function () {
@@ -90,7 +121,7 @@ document.getElementById("dataimport").onclick = async function () {
       addResult('Import error: ' + error.message);
     }
   }
-}
+};
 
 // ヘルパー関数
 function addResult(data) {
@@ -99,13 +130,6 @@ function addResult(data) {
   document.getElementById("output").appendChild(code);
 }
 
-/**
- * Saves a file by creating a downloadable instance, and clicking on the
- * download link.
- *
- * @param {string} filename Filename to save the file as.
- * @param {arrayBuffer} contents Contents of the file to save.
- */
 function saveFile(filename, contents) {
   const blob = new Blob([contents], { type: 'application/sqlite.db' });
   const url = URL.createObjectURL(blob);
@@ -114,14 +138,8 @@ function saveFile(filename, contents) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
-};
+}
 
-
-/**
- * Uses the <input type="file"> to open a new file
- *
- * @return {!Promise<File>} File selected by the user.
- */
 async function getFile() {
   return new Promise((resolve) => {
     const input = document.createElement('input');
@@ -133,13 +151,6 @@ async function getFile() {
   });
 }
 
-/**
- * Reads the raw text from a file.
- *
- * @private
- * @param {File} file
- * @return {Promise<string>} A promise that resolves to the parsed string.
- */
 async function readFileAsArrayBuffer(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -148,5 +159,3 @@ async function readFileAsArrayBuffer(file) {
     reader.readAsArrayBuffer(file);
   });
 }
-
-

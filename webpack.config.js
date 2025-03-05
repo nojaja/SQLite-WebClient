@@ -12,20 +12,8 @@ module.exports = {
   },
   entry: './src/js/index.js',
   output: {
-    filename: './[name].bundle.js',
-    sourceMapFilename: './map/[id].[chunkhash].js.map',
-    chunkFilename: './chunk/[id].[chunkhash].js',
-    path: path.resolve(__dirname, 'docs')
-  },
-  resolve: {
-    fallback: {
-      "crypto": require.resolve("crypto-browserify"),
-      "path": require.resolve("path-browserify"),
-      "vm": require.resolve("vm-browserify"),
-      "buffer": require.resolve("buffer/"),
-      "stream": require.resolve("stream-browserify"),
-      "fs": false
-    }
+    filename: 'main.bundle.js',
+    path: path.resolve(__dirname, 'docs'),
   },
   plugins: [
     new HtmlWebpackPlugin({
@@ -37,7 +25,7 @@ module.exports = {
     new CopyPlugin({
       patterns: [
         {
-          from: 'node_modules/sql.js/dist/sql-wasm.wasm',
+          from: 'node_modules/@sqlite.org/sqlite-wasm/sqlite-wasm/',
           to: './',
           globOptions: {
             ignore: ['**/*.js', '**/*.mjs'],
