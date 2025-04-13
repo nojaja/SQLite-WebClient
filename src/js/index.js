@@ -1,8 +1,9 @@
-import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
+import { default as init } from '@sqlite.org/sqlite-wasm';
 
 class SQLiteManager {
   static async initialize() {
-    const sqlite3 = await sqlite3InitModule({
+    // SQLite モジュールを初期化
+    const sqlite3 = await init({
       print: console.log,
       printErr: console.error
     });
@@ -12,10 +13,11 @@ class SQLiteManager {
   constructor(sqlite3) {
     this.sqlite3 = sqlite3;
     const filename = "dbfile_" + (0xffffffff * Math.random() >>> 0);
+    // データベースを作成
     this.db = new sqlite3.oo1.DB(filename, "ct");
   }
 
-  exec(sql,bind) {
+  exec(sql, bind) {
     const results = [];
     let columnNames = [];
     try {
@@ -37,6 +39,22 @@ class SQLiteManager {
     }
   }
 
+  prepare(sql){
+    const stmt = this.db.prepare(sql);
+    stmt.getRowAsObject = () => this.getRowAsObject(stmt);
+    return stmt;
+  }
+
+  // ヘルパーメソッド：行データをオブジェクトとして取得
+  getRowAsObject(stmt) {
+    const obj = {};
+    const columnNames = stmt.getColumnNames();
+    for (let i = 0; i < columnNames.length; i++) {
+      obj[columnNames[i]] = stmt.get(i);
+    }
+    return obj;
+  }
+  
   getColumnNames() {
     const stmt = this.db.prepare("SELECT * FROM sqlite_master LIMIT 1");
     try {
@@ -58,7 +76,7 @@ class SQLiteManager {
     const vfsName = 'unix'; // 使用するVFSの名前
     const filename = "dbfile_" + (0xffffffff * Math.random() >>> 0);
 
-    this.sqlite3.capi.sqlite3_js_vfs_create_file(vfsName, filename, contents, contents.length); 
+    this.sqlite3.capi.sqlite3_js_vfs_create_file(vfsName, filename, contents, contents.length);
     this.db = new this.sqlite3.oo1.DB(filename);
   }
 
@@ -67,41 +85,52 @@ class SQLiteManager {
   }
 }
 
-// メインの処理
-document.addEventListener("DOMContentLoaded", async function () {
+// 入力フィールドとボタンの取得
+const inputField = document.getElementById('sql');
+const execButton = document.getElementById('execButton');
+const resultDiv = document.getElementById('result');
+
+// DOMが読み込まれた後に実行
+document.addEventListener('DOMContentLoaded', async () => {
   try {
     // SQLite WAMSの初期化
     window.sqliteManager = await SQLiteManager.initialize();
-    console.log("SQLite WAMS initialized");
+    log('SQLite WAMS initialized');
+    // vec_version() を実行してバージョンを取得
+    const [sqlite_version] = window.sqliteManager.exec('select sqlite_version();').values;
+    log(`sqlite_version=${sqlite_version}`);
+    log('SQLite バージョン情報の取得に成功しました。');
+
+
+    // executeボタンクリックイベントの設定
+    execButton.addEventListener('click', async () => {
+      const sqlStatements = inputField.value.split(';');
+      sqlStatements.forEach(sql => {
+        if (sql.trim()) {
+          try {
+            console.log(sql);
+            addResult('sql    > ' + sql);
+            const result = window.sqliteManager.exec(sql);
+            console.log(result);
+            if (result && result.values.length > 0) {
+              addResult('result.columns> ' + result.columns.join(', '));
+              result.values.forEach(row => {
+                addResult('result.values> ' + row.join(', '));
+              });
+            }
+          } catch (error) {
+            console.error('エラーが発生しました:', error);
+            log('エラーが発生しました。'+ error.message);
+          }
+        }
+      });
+    });
+
   } catch (error) {
-    console.error("Failed to initialize SQLite WAMS:", error);
+    console.error('Failed to initialize SQLite WAMS:', error);
   }
 });
 
-// execute ボタンのイベントハンドラ
-document.getElementById("exec").onclick = function () {
-  const sqlStatements = document.getElementById("sql").value.split(';');
-  
-  sqlStatements.forEach(sql => {
-    if (sql.trim()) {
-      try {
-        console.log(sql);
-        addResult('sql    > ' + sql);
-        const result = window.sqliteManager.exec(sql);
-        console.log(result);
-        if (result && result.values.length > 0) {
-          addResult('result.columns> ' + result.columns.join(', '));
-          result.values.forEach(row => {
-            addResult('result.values> ' + row.join(', '));
-          });
-        }
-      } catch (error) {
-        console.error(error);
-        addResult('error  > ' + error.message);
-      }
-    }
-  });
-};
 
 // データエクスポートのイベントハンドラ
 document.getElementById("dataexport").onclick = function () {
@@ -116,20 +145,37 @@ document.getElementById("dataimport").onclick = async function () {
     const arrayBuffer = await readFileAsArrayBuffer(file);
     try {
       await window.sqliteManager.import(arrayBuffer);
-      addResult('Import completed successfully');
+      log('Import completed successfully');
     } catch (error) {
-      addResult('Import error: ' + error.message);
+      log('Import error: ' + error.message);
     }
   }
 };
 
 // ヘルパー関数
+function log(message) {
+  console.log(message);
+  //resultDiv.textContent = message;
+  const div = resultDiv.appendChild(document.createElement('div'));
+  div.innerText = message;
+  // 結果を表示するための div 要素を作成
+  // const div = document.body.appendChild(document.createElement('div'));
+  // div.innerText = versionText;
+}
+
 function addResult(data) {
   const code = document.createElement("li");
   code.textContent = data;
   document.getElementById("output").appendChild(code);
 }
 
+/**
+ * Saves a file by creating a downloadable instance, and clicking on the
+ * download link.
+ *
+ * @param {string} filename Filename to save the file as.
+ * @param {arrayBuffer} contents Contents of the file to save.
+ */
 function saveFile(filename, contents) {
   const blob = new Blob([contents], { type: 'application/sqlite.db' });
   const url = URL.createObjectURL(blob);

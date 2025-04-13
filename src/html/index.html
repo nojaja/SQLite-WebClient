@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SQLite WASM Sample</title>
   <style>
@@ -9,18 +9,20 @@
       width: 100%;
       margin-bottom: 10px;
     }
+
     button {
       margin-right: 10px;
       margin-bottom: 10px;
     }
+
     #output {
       font-family: monospace;
       white-space: pre-wrap;
     }
   </style>
 </head>
+
 <body>
-  <header>
     <h1>SQLite WASM Sample</h1>
     <textarea id="sql" cols="80" rows="6">
 SELECT sqlite_version();
@@ -30,11 +32,11 @@ INSERT INTO test VALUES (2, 222);
 SELECT * FROM test;
 	</textarea>
     <div>
-      <button id="exec">execute</button>
-      <button id="dataexport">dataexport</button>
-      <button id="dataimport">dataimport</button>
+      <button id="execButton">execute</button>
+      <button id="dataexport">データベースのexport</button>
+      <button id="dataimport">データベースのimport</button>
     </div>
+    <div id="result"></div>
     <ol id="output"></ol>
-  </header>
 </body>
 </html>
