@@ -1,6 +1,7 @@
 const path = require('path');
 const src = path.resolve(__dirname, 'src');
 const dist = path.resolve(__dirname, 'dist');
+const version = JSON.stringify(require('./package.json').version);
 const CopyPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
@@ -41,10 +42,10 @@ module.exports = {
           from: 'node_modules/@sqlite.org/sqlite-wasm/sqlite-wasm/',
           to: './',
           globOptions: {
-            ignore: ['**/*.js', '**/*.mjs'],
+            ignore: ['**/*.js', '**/*.mjs']
           }
         }
-      ],
-    }),
-  ],
+      ]
+    })
+  ]
 };
