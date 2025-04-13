@@ -1,82 +1,97 @@
-import initSqlJs from "sql.js";
+import { default as init } from "sql.js";
 
 class SQLiteManager {
   static async initialize() {
-    const config = {
+    // SQLite モジュールを初期化
+    const sqlite3 = await init({
       // Required to load the wasm binary asynchronously. Of course, you can host it wherever you want
       // You can omit locateFile completely when running in node
       //locateFile: file => `https://sql.js.org/dist/${file}`
       //locateFile: filename => `/dist/${filename}`
-      locateFile: file => './sql-wasm.wasm'
-    }
-    const sqlite3 = await initSqlJs(config);
+      locateFile: file => './sql-wasm.wasm',
+      print: console.log,
+      printErr: console.error
+    });
     return new SQLiteManager(sqlite3);
   }
 
   constructor(sqlite3) {
     this.sqlite3 = sqlite3;
+    // データベースを作成
     this.db = new sqlite3.Database();
   }
 
-  exec(sql,bind) {
+  exec(sql, bind) {
     return this.db.exec(sql);
   }
 
   export() {
-    return this.db.export();
+    const exportedData = this.db.export();
+    return exportedData;
   }
 
   async import(contents) {
     this.db.close();
     this.db = new this.sqlite3.Database(contents);
   }
+
+  close() {
+    this.db.close();
+  }
 }
 
-// メインの処理
-document.addEventListener("DOMContentLoaded", async function () {
+// 入力フィールドとボタンの取得
+const inputField = document.getElementById('sql');
+const execButton = document.getElementById('execButton');
+const resultDiv = document.getElementById('result');
+
+// DOMが読み込まれた後に実行
+document.addEventListener('DOMContentLoaded', async () => {
   try {
     // SQLite WAMSの初期化
     window.sqliteManager = await SQLiteManager.initialize();
-    console.log("SQLite WAMS initialized");
+    log('SQLite WAMS initialized');
+    // vec_version() を実行してバージョンを取得    
+    const [sqlite_version] = window.sqliteManager.exec('select sqlite_version();')[0].values;
+    log(`sqlite_version=${sqlite_version}`);
+    log('SQLite バージョン情報の取得に成功しました。');
+
+
+    // executeボタンクリックイベントの設定
+    execButton.addEventListener('click', async () => {
+      const sqlStatements = inputField.value.split(';');
+      sqlStatements.forEach(sql => {
+        if (sql.trim()) {
+          try {
+            console.log(sql);
+            addResult('sql    > ' + sql);
+            const result = window.sqliteManager.exec(sql)[0];
+            console.log(result);
+            if (result && result.values.length > 0) {
+              addResult('result.columns> ' + result.columns.join(', '));
+              result.values.forEach(row => {
+                addResult('result.values> ' + row.join(', '));
+              });
+            }
+          } catch (error) {
+            console.error('エラーが発生しました:', error);
+            log('エラーが発生しました。'+ error.message);
+          }
+        }
+      });
+    });
+
   } catch (error) {
-    console.error("Failed to initialize SQLite WAMS:", error);
+    console.error('Failed to initialize SQLite WAMS:', error);
   }
 });
 
-
-// execute ボタンのイベントハンドラ
-document.getElementById("exec").onclick = function () {
-  const sqlStatements = document.getElementById("sql").value.split(";");
-
-  sqlStatements.forEach(sql => {
-    if (sql.trim()) {
-      try {
-        console.log(sql);
-        addResult('sql    > ' + sql);
-        const result = window.sqliteManager.exec(sql);
-        console.log(result);
-        result.forEach(result => {
-          console.log(result);
-          if (result.columns) {
-            addResult('result.columns> ' + result.columns.join(', '));
-          }
-          result.values.forEach(row => {
-            addResult('result.values> ' + row.join(', '));
-          });
-        });
-      } catch (error) {
-        console.log(error);
-        addResult('error > ' + error.message);
-      }
-    }
-  });
-}
 
 // データエクスポートのイベントハンドラ
 document.getElementById("dataexport").onclick = function () {
   const data = window.sqliteManager.export();
   saveFile('Untitled.db', data)
-}
+};
 
 // データインポートのイベントハンドラ
 document.getElementById("dataimport").onclick = async function () {
@@ -85,14 +100,24 @@ document.getElementById("dataimport").onclick = async function () {
     const arrayBuffer = await readFileAsArrayBuffer(file);
     try {
       await window.sqliteManager.import(arrayBuffer);
-      addResult('Import completed successfully');
+      log('Import completed successfully');
     } catch (error) {
-      addResult('Import error: ' + error.message);
+      log('Import error: ' + error.message);
     }
   }
-}
+};
 
 // ヘルパー関数
+function log(message) {
+  console.log(message);
+  //resultDiv.textContent = message;
+  const div = resultDiv.appendChild(document.createElement('div'));
+  div.innerText = message;
+  // 結果を表示するための div 要素を作成
+  // const div = document.body.appendChild(document.createElement('div'));
+  // div.innerText = versionText;
+}
+
 function addResult(data) {
   const code = document.createElement("li");
   code.textContent = data;
@@ -116,12 +141,6 @@ function saveFile(filename, contents) {
   URL.revokeObjectURL(url);
 };
 
-
-/**
- * Uses the <input type="file"> to open a new file
- *
- * @return {!Promise<File>} File selected by the user.
- */
 async function getFile() {
   return new Promise((resolve) => {
     const input = document.createElement('input');
@@ -133,13 +152,6 @@ async function getFile() {
   });
 }
 
-/**
- * Reads the raw text from a file.
- *
- * @private
- * @param {File} file
- * @return {Promise<string>} A promise that resolves to the parsed string.
- */
 async function readFileAsArrayBuffer(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -148,5 +160,3 @@ async function readFileAsArrayBuffer(file) {
     reader.readAsArrayBuffer(file);
   });
 }
-
-

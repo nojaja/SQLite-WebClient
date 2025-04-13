@@ -1,21 +1,33 @@
 const path = require('path');
+const src = path.resolve(__dirname, 'src');
+const dist = path.resolve(__dirname, 'dist');
+const version = JSON.stringify(require('./package.json').version);
 const CopyPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
+  mode: process.env.NODE_ENV === 'production' ? 'development' : 'production',
   devtool: 'inline-source-map',
   devServer: {
     static: {
-      directory: path.join(__dirname, 'docs'),
+      directory: dist
     },
     compress: true
   },
-  entry: './src/js/index.js',
+  performance: {
+    hints: false,
+    maxEntrypointSize: 512000,
+    maxAssetSize: 512000
+  },
+  entry: {
+    'main': './src/js/index.js'
+  },
   output: {
     filename: './[name].bundle.js',
     sourceMapFilename: './map/[id].[chunkhash].js.map',
     chunkFilename: './chunk/[id].[chunkhash].js',
-    path: path.resolve(__dirname, 'docs')
+    path: dist,
+    publicPath:""
   },
   resolve: {
     fallback: {
@@ -31,8 +43,8 @@ module.exports = {
     new HtmlWebpackPlugin({
       inject: true,
       chunks: ['main'],
-      template: 'src/html/index.html',
-      filename: 'index.html'
+      template: './src/html/index.html',
+      filename: './index.html'
     }),
     new CopyPlugin({
       patterns: [
@@ -43,7 +55,7 @@ module.exports = {
             ignore: ['**/*.js', '**/*.mjs'],
           }
         }
-      ],
-    }),
-  ],
+      ]
+    })
+  ]
 };
