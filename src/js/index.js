@@ -1,3 +1,4 @@
+// SQLite モジュールをインポート
 import { default as init } from '@sqlite.org/sqlite-wasm';
 
 class SQLiteManager {
@@ -30,10 +31,10 @@ class SQLiteManager {
           results.push(Object.values(row));
         }
       });
-      return {
+      return [{
         columns: columnNames,
         values: results
-      };
+      }];
     } catch (error) {
       throw error;
     }
@@ -67,7 +68,6 @@ class SQLiteManager {
 
   export() {
     const exportedData = this.sqlite3.capi.sqlite3_js_db_export(this.db);
-    console.log(exportedData)
     return exportedData;
   }
 
@@ -97,7 +97,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.sqliteManager = await SQLiteManager.initialize();
     log('SQLite WAMS initialized');
     // vec_version() を実行してバージョンを取得
-    const [sqlite_version] = window.sqliteManager.exec('select sqlite_version();').values;
+    const [sqlite_version] = window.sqliteManager.exec('select sqlite_version();')[0].values;
     log(`sqlite_version=${sqlite_version}`);
     log('SQLite バージョン情報の取得に成功しました。');
 
@@ -110,7 +110,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           try {
             console.log(sql);
             addResult('sql    > ' + sql);
-            const result = window.sqliteManager.exec(sql);
+            const result = window.sqliteManager.exec(sql)[0];
             console.log(result);
             if (result && result.values.length > 0) {
               addResult('result.columns> ' + result.columns.join(', '));
@@ -184,7 +184,7 @@ function saveFile(filename, contents) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
-}
+};
 
 async function getFile() {
   return new Promise((resolve) => {
