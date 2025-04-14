@@ -4,7 +4,6 @@
 このプロジェクトは、ブラウザ上でsqliteの処理を行うサンプルです。
 SQLite working on browser Sample
 
-[![Licence](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE) 
 ## 作成について
 このプロジェクトはsql.jsでの実装をClaude 3.7 Sonnetを使ってsqlite.orgに移植したものです。
 
@@ -43,3 +42,4 @@ SQLite working on browser Sample
 ## License
 
 Licensed under the [MIT](LICENSE) License.
+[![Licence](https://img.shields.io/badge/License-MIT-green.svg?style=flat-square)](LICENSE) 
