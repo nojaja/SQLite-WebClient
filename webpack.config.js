@@ -52,7 +52,7 @@ module.exports = {
           from: 'node_modules/sql.js/dist/sql-wasm.wasm',
           to: './',
           globOptions: {
-            ignore: ['**/*.js', '**/*.mjs'],
+            ignore: ['**/*.js', '**/*.mjs']
           }
         }
       ]
