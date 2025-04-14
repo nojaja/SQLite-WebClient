@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.sqliteManager = await SQLiteManager.initialize();
     log('SQLite WAMS initialized');
     // vec_version() を実行してバージョンを取得
-    const [sqlite_version] = window.sqliteManager.exec('select sqlite_version();')[0].values;
+    const [sqlite_version] = window.sqliteManager.db.exec('select sqlite_version();')[0].values;
     log(`sqlite_version=${sqlite_version}`);
     log('SQLite バージョン情報の取得に成功しました。');
 
@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           try {
             console.log(sql);
             addResult('sql    > ' + sql);
-            const result = window.sqliteManager.exec(sql)[0];
+            const result = window.sqliteManager.db.exec(sql)[0];
             console.log(result);
             if (result && result.values.length > 0) {
               addResult('result.columns> ' + result.columns.join(', '));
