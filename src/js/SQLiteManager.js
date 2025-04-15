@@ -2,11 +2,11 @@
 import { default as init } from 'sql.js';
 
 class SQLiteManager {
-    static async initialize(data) {
+    static async initialize(data, options) {
         // SQLite モジュールを初期化
         const sqlite3 = await init({
-            print: console.log,
-            printErr: console.error,
+            print: options.print || (() => { }),
+            printErr: options.printErr || (() => { }),
             // Required to load the wasm binary asynchronously. Of course, you can host it wherever you want
             // You can omit locateFile completely when running in node
             //locateFile: file => `https://sql.js.org/dist/${file}`
@@ -32,7 +32,9 @@ class SQLiteManager {
         return sqlite3_instance;
     }
 
-    constructor(sqlite3, data) {
+    constructor(sqlite3, data, options = {}) {
+        this.print = options.print || (() => { });
+        this.printErr = options.printErr || (() => { });
         this.sqlite3 = sqlite3;
         // データベースを作成
         this.db = new sqlite3.Database(data);

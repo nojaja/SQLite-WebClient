@@ -9,7 +9,10 @@ const resultDiv = document.getElementById('result');
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     // SQLite WAMSの初期化
-    window.sqliteManager = await SQLiteManager.initialize();
+    window.sqliteManager = await SQLiteManager.initialize(null, {
+      print: console.log,
+      printErr: console.error
+    });
     log('SQLite WAMS initialized');
     // vec_version() を実行してバージョンを取得    
     const [sqlite_version] = window.sqliteManager.db.exec('select sqlite_version();')[0].values;
@@ -35,7 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
           } catch (error) {
             console.error('エラーが発生しました:', error);
-            log('エラーが発生しました。'+ error.message);
+            log('エラーが発生しました。' + error.message);
           }
         }
       });
