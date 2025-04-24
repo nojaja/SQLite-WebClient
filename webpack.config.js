@@ -29,6 +29,12 @@ module.exports = {
     path: dist,
     publicPath:""
   },
+  resolve: {
+    fallback: {
+      'fs': false,
+      'path': require.resolve("path-browserify")
+    }
+  },
   plugins: [
     new HtmlWebpackPlugin({
       inject: true,
