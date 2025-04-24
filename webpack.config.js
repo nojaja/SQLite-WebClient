@@ -31,12 +31,12 @@ module.exports = {
   },
   resolve: {
     fallback: {
-      "crypto": require.resolve("crypto-browserify"),
-      "path": require.resolve("path-browserify"),
-      "vm": require.resolve("vm-browserify"),
-      "buffer": require.resolve("buffer/"),
-      "stream": require.resolve("stream-browserify"),
-      "fs": false
+      'crypto': require.resolve("crypto-browserify"),
+      'vm': require.resolve("vm-browserify"),
+      'buffer': require.resolve("buffer/"),
+      'stream': require.resolve("stream-browserify"),
+      'fs': false,
+      'path': require.resolve("path-browserify")
     }
   },
   plugins: [
