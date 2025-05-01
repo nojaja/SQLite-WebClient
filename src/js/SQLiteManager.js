@@ -8,7 +8,7 @@ import * as fs from 'fs';
 sourceMapSupport.install();
 
 class SQLiteManager {
-    static async initialize(data, options) {
+  static async initialize(data, options = {}) {
         // SQLite モジュールを初期化
         // Ensure global.window is set to simulate browser environment for wasm
         if (typeof window === 'undefined') global.window = {};
@@ -78,9 +78,46 @@ class SQLiteManager {
         };
     }
 
+
+  executeQuery(query) {
+    try {
+      const isSelect = /(^SELECT|^EXPLAIN QUERY PLAN)\s/i.test(query.trim()); // SELECT文もしくはEXPLAIN QUERY PLAN文かを判定
+      if (isSelect) {
+        const [result] = this.db.exec(query);
+        const results = result.values.map(vals => Object.fromEntries(result.columns.map((c, i) => [c, vals[i]])));
+        return { success: true, results, columns: result.columns };
+      } else {
+        // DDL/非SELECTは末尾セミコロンを除去して実行
+        const sql = query.trim().replace(/;$/, '');
+        this.db.exec(sql);
+        return { success: true, info: {} };
+      }
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
+  getDatabaseSchema() {
+    const sql = `SELECT type, name FROM sqlite_master WHERE type IN ('table','view','index','trigger') ORDER BY type,name`;
+    const [rows] = this.db.exec(sql);
+    const schema = { tables: [], views: [], indexes: [], triggers: [] };
+    rows.values.forEach(vals => {
+      const type = vals[0], name = vals[1];
+      if (type === 'table') schema.tables.push(name);
+      if (type === 'view') schema.views.push(name);
+      if (type === 'index') schema.indexes.push(name);
+      if (type === 'trigger') schema.triggers.push(name);
+    });
+    return schema;
+  }
+
+  getTableStructure(tableName) {
+    const sql = `PRAGMA table_info(${tableName})`;
+    const [rows] = this.db.exec(sql);
+    return rows.values.map(vals => Object.fromEntries(rows.columns.map((c, i) => [c, vals[i]])));
+  }
     export() {
-        const exportedData = this.db.export();
-        return exportedData;
+        return this.db.export();
     }
 
     async import(contents) {
@@ -92,4 +129,4 @@ class SQLiteManager {
         this.db.close();
     }
 }
-export default SQLiteManager
+export default SQLiteManager;
