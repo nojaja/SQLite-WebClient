@@ -69,6 +69,7 @@ body {
   padding: 8px;
   background-color: #e8e8e8;
   border-bottom: 1px solid #ddd;
+  height: 3vh;
 }
 
 .tree-view {
@@ -283,4 +284,40 @@ table.dataTable tbody td {
 /* 更新ボタンのアイコン色 */
 #refresh-db-button .material-symbols-outlined {
   color: black;
+}
+
+/* --- モバイル対応: メニュー文字非表示・スプリッタ幅拡大 --- */
+@media (max-width: 1400px) {
+  /* メニューボタンのテキストを非表示（アイコンのみ） */
+  .menu-button span + span,
+  .menu-button span:not(.material-symbols-outlined) {
+    display: none !important;
+  }
+  .menu-button {
+    min-width: 0;
+    padding: 5px 6px;
+    font-size: 0; /* テキストの余白を消す */
+  }
+  /* splitter/row-splitterの幅・高さを拡大 */
+  .splitter {
+    width: 16px !important;
+    min-width: 16px !important;
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+  .row-splitter {
+    height: 16px !important;
+    min-height: 16px !important;
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+  .query-editor {
+    height: 100px;
+    min-height: 30px;
+  }
+  
+  .tree-label {
+    font-size: 18px !important;
+  }
+  .tree-label .material-symbols-outlined {
+    font-size: 20px !important;
+  }
 }
