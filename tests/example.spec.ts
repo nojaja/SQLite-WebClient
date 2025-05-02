@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 test('ホームページのタイトルが表示される', async ({ page }) => {
   await page.goto('/');
-  await expect(page).toHaveTitle(/SQL.js WASM Sample/);
+  await expect(page).toHaveTitle(/SQLClient - SQL.js WASM/);
 });
 
 test('トリガー付き複数SQL文の動作確認', async ({ page }) => {
