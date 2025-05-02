@@ -1,0 +1,286 @@
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+  height: 100vh;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #f0f0f0;
+}
+
+.menu-bar {
+  display: flex;
+  background-color: rgb(30, 30, 30);
+  padding: 4px;
+  color: white;
+}
+
+.menu-group {
+  display: flex;
+  margin-right: 15px;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  padding-right: 15px;
+}
+
+.menu-button {
+  background: none;
+  border: none;
+  color: white;
+  padding: 5px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+}
+
+.menu-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.icon {
+  margin-right: 5px;
+  font-style: normal;
+}
+
+.main-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 250px;
+  background-color: #f8f8f8;
+  border-right: 1px solid #ddd;
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: bold;
+  padding: 8px;
+  background-color: #e8e8e8;
+  border-bottom: 1px solid #ddd;
+}
+
+.tree-view {
+  flex: 1;
+  overflow: auto;
+  padding: 5px;
+}
+
+.tree-item {
+  margin: 2px 0;
+  cursor: pointer;
+}
+
+.tree-label {
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  font-size: 16px; /* 文字サイズ */
+}
+
+/* ツリーラベル内のアイコンサイズ調整 */
+.tree-label .material-symbols-outlined {
+  font-size: 18px; /* アイコンサイズ */
+  margin-right: 4px; /* アイコンとテキストの間隔調整 */
+}
+
+/* トグルアイコンの調整 (必要に応じて) */
+.tree-label .toggle-icon {
+  margin-right: 2px;
+}
+
+.tree-label:hover {
+  background-color: #e0e0e0;
+}
+
+.tree-items {
+  margin-left: 30px; /* インデントを 20px から 30px に変更 */
+}
+
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.query-tabs {
+  display: flex;
+  background-color: #e8e8e8;
+  border-bottom: 1px solid #ddd;
+}
+
+.query-tab {
+  padding: 8px 15px;
+  background-color: #f0f0f0;
+  border-right: 1px solid #ddd;
+  cursor: pointer;
+  position: relative;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+}
+
+.query-tab.active {
+  background-color: white;
+}
+
+.close-tab {
+  margin-left: 8px;
+  font-size: 14px;
+  opacity: 0.6;
+}
+
+.close-tab:hover {
+  opacity: 1;
+}
+
+/* タブの背景色: アクティブと非アクティブ */
+.query-tab {
+  background-color: #f0f0f0;
+}
+.query-tab.active {
+  background-color: white;
+}
+
+.query-editor {
+  height: 200px;
+  border-bottom: 1px solid #ddd;
+}
+
+.query-editor textarea {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: none;
+  padding: 10px;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+}
+
+.results-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.results-tabs {
+  display: flex;
+  border-bottom: 1px solid #ddd;
+  background-color: #f0f0f0;
+}
+
+.result-tab {
+  padding: 5px 15px;
+  cursor: pointer;
+}
+
+.result-tab.active {
+  border-bottom: 2px solid #0078d7;
+}
+
+.results-grid {
+  flex: 1;
+  padding: 0; /* パディングを 0 に変更 */
+  overflow-y: auto; /* 縦スクロールをコンテナで管理 */
+  overflow-x: auto; /* 横スクロール */
+  background-color: white;
+  display: flex; /* DataTablesコンテナがflexアイテムとして高さを占めるように */
+  flex-direction: column; /* DataTablesコンテナを縦に配置 */
+}
+
+/* DataTablesのコンテナの高さを100%にする */
+.dataTables_wrapper {
+  padding-top: 0; /* 上の余白を削除 */
+  flex: 1; /* 親要素(.results-grid)の残りの高さを占める */
+  display: flex;
+  flex-direction: column;
+}
+
+/* DataTablesのスクロール可能な本体 */
+.dataTables_scrollBody {
+  flex: 1; /* 利用可能な高さを占める */
+}
+
+.status-bar {
+  background-color: #f0f0f0;
+  border-top: 1px solid #ddd;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: #555;
+  height: 20px;
+}
+
+.status-error {
+  color: #d83b01;
+}
+
+.status-success {
+  color: #107c10;
+}
+
+/* DataTables スタイル上書き */
+.dataTables_wrapper {
+  padding-top: 0; /* 上の余白を削除 (重複するが念のため) */
+}
+
+table.dataTable {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+table.dataTable thead th {
+  background-color: #e8e8e8;
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+  font-size: 13px; /* フォントサイズ変更 */
+}
+
+table.dataTable tbody td {
+  border: 1px solid #ddd;
+  padding: 6px;
+  font-size: 13px; /* フォントサイズ変更 */
+}
+
+.dataTables_info, .dataTables_paginate {
+  font-size: 16px; /* フォントサイズ変更 */
+  padding: 10px 0;
+}
+
+.splitter {
+  flex: none;
+  width: 5px;
+  cursor: col-resize;
+  background-color: transparent;
+}
+.splitter:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* 水平スプリッタ */
+.row-splitter {
+  height: 5px;
+  cursor: row-resize;
+  background-color: transparent;
+}
+.row-splitter:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+/* 更新ボタンのアイコン色 */
+#refresh-db-button .material-symbols-outlined {
+  color: black;
+}

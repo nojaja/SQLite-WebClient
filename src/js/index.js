@@ -1,135 +1,56 @@
-import SQLiteManager from './SQLiteManager.js'
+// SQLite Sample - SQLクライアントアプリケーション
+import $ from 'jquery';
+import '../css/app.css';
+// DataTablesのスタイルをバンドル（app.cssの後に読み込む）
+import 'datatables.net-dt/css/dataTables.dataTables.min.css';
+import 'datatables.net-fixedheader-dt/css/fixedHeader.dataTables.min.css';
+import { createUI } from './ui.js';
+import { setupEventHandlers } from './events.js';
+import SQLiteManager from './SQLiteManager.js';
+import TabManager from './tabManager.js';
+import { setupResultsMessagesToggle } from './ui/ImagesNotExists.js'; // Import added
 
-// 入力フィールドとボタンの取得
-const inputField = document.getElementById('sql');
-const execButton = document.getElementById('execButton');
-const resultDiv = document.getElementById('result');
+// DataTablesプラグインの初期化
+window.$ = window.jQuery = $;
+console.log('ブラウザ環境でDataTablesを初期化しました');
 
-// DOMが読み込まれた後に実行
-document.addEventListener('DOMContentLoaded', async () => {
-  try {
-    // SQLite WAMSの初期化
-    window.sqliteManager = await SQLiteManager.initialize(null, {
-      print: console.log,
-      printErr: console.error
-    });
-    log('SQLite WAMS initialized');
-    // vec_version() を実行してバージョンを取得
-    const [sqlite_version] = window.sqliteManager.db.exec('select sqlite_version();')[0].values;
-    log(`sqlite_version=${sqlite_version}`);
-    log('SQLite バージョン情報の取得に成功しました。');
-
-    // window.sqliteManager.db.createFunction({
-    //   name: 'add2',
-    //   xFunc: (_, a, b, c, d) => {console.log("aa",a, b); return a + b},
-    //   arity: 2,
-    // });
-    // // テスト方法も変更
-    // const result = window.sqliteManager.db.exec('SELECT add2(12, 6)')[0];
-    // console.log('Result from exec:', result.values[0]);
-
-
-    // executeボタンクリックイベントの設定
-    execButton.addEventListener('click', async () => {
-      const sqlStatements = inputField.value.split(';');
-      sqlStatements.forEach(sql => {
-        if (sql.trim()) {
-          try {
-            console.log(sql);
-            addResult('sql    > ' + sql);
-            const result = window.sqliteManager.db.exec(sql)[0];
-            console.log(result);
-            if (result && result.values.length > 0) {
-              addResult('result.columns> ' + result.columns.join(', '));
-              result.values.forEach(row => {
-                addResult('result.values> ' + row.join(', '));
-              });
-            }
-          } catch (error) {
-            console.error('エラーが発生しました:', error);
-            log('エラーが発生しました。' + error.message);
-          }
-        }
-      });
-    });
-
-  } catch (error) {
-    console.error('Failed to initialize SQLite WAMS:', error);
-  }
-});
-
-
-// データエクスポートのイベントハンドラ
-document.getElementById("dataexport").onclick = async function () {
-  const data = await window.sqliteManager.export();
-  saveFile('Untitled.db', data)
-};
-
-// データインポートのイベントハンドラ
-document.getElementById("dataimport").onclick = async function () {
-  const file = await getFile();
-  if (file) {
-    const arrayBuffer = await readFileAsArrayBuffer(file);
-    try {
-      const data = new Uint8Array(arrayBuffer);
-      await window.sqliteManager.import(data);
-      log('Import completed successfully');
-    } catch (error) {
-      log('Import error: ' + error.message);
-    }
-  }
-};
-
-// ヘルパー関数
-function log(message) {
-  console.log(message);
-  //resultDiv.textContent = message;
-  const div = resultDiv.appendChild(document.createElement('div'));
-  div.innerText = message;
-  // 結果を表示するための div 要素を作成
-  // const div = document.body.appendChild(document.createElement('div'));
-  // div.innerText = versionText;
-}
-
-function addResult(data) {
-  const code = document.createElement("li");
-  code.textContent = data;
-  document.getElementById("output").appendChild(code);
-}
-
-/**
- * Saves a file by creating a downloadable instance, and clicking on the
- * download link.
- *
- * @param {string} filename Filename to save the file as.
- * @param {arrayBuffer} contents Contents of the file to save.
- */
-function saveFile(filename, contents) {
-  const blob = new Blob([contents], { type: 'application/sqlite.db' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-};
-
-async function getFile() {
-  return new Promise((resolve) => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.onchange = () => {
-      resolve(input.files[0]);
-    };
-    input.click();
+// アプリケーションのメインエントリポイント
+const main = async () => {
+  console.log('SQLite Sampleアプリケーションを起動中...');
+  // ブラウザ環境でのみUIを先行して初期化
+  let ui = null;
+  let tabManager = null;
+  ui = createUI();
+  tabManager = new TabManager({
+    containerId: 'query-tabs',
+    editorId: 'sql-editor',
+    resultsId: 'results-grid',
+    messagesId: 'messages-area'
   });
-}
 
-async function readFileAsArrayBuffer(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsArrayBuffer(file);
-  });
-}
+  // 即時バインド: 新規Queryボタンでタブ追加
+  const newQueryBtn = document.getElementById('new-query-button');
+  if (newQueryBtn) {
+    newQueryBtn.addEventListener('click', () => tabManager.addTab('Query'));
+  }
+  // 即時バインド: Results/Messagesタブ切り替え
+  setupResultsMessagesToggle(); // Replaced the event listener block with this function call
+
+  // データベース機能を SQLiteManager でセットアップ (print, printErr を指定)
+  const db = await SQLiteManager.initialize(null, { print: console.log, printErr: console.error });
+  // ブラウザ環境ではイベントハンドラと初期DB表示をセットアップ
+  setupEventHandlers(ui, db, tabManager);
+  db.executeQuery(`CREATE TABLE IF NOT EXISTS test (col1 INTEGER PRIMARY KEY, col2 TEXT)`);
+  db.executeQuery(`INSERT OR IGNORE INTO test (col1, col2) VALUES (1, '111')`);
+  db.executeQuery(`INSERT OR IGNORE INTO test (col1, col2) VALUES (2, '222')`);
+  // スキーマ取得とツリービュー更新
+  const schema = db.getDatabaseSchema();
+  ui.updateDatabaseTree(schema);
+
+  console.log('SQLite Sampleの起動が完了しました！');
+};
+
+// アプリケーションを実行
+(async () => {
+  await main();
+})();
