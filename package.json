@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "sql.js": "^1.5.0",
+    "dbgate-query-splitter": "^4.11.4",
     "path-browserify": "^1.0.1",
     "process": "^0.11.10",
     "crypto-browserify": "^3.12.1",
