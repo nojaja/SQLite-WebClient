@@ -4,15 +4,21 @@ const dist = path.resolve(__dirname, 'dist');
 const version = JSON.stringify(require('./package.json').version);
 const CopyPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const webpack = require('webpack');
 
 module.exports = {
   mode: process.env.NODE_ENV === 'production' ? 'development' : 'production',
   devtool: 'inline-source-map',
+  // 開発サーバーの設定
   devServer: {
     static: {
       directory: dist
     },
-    compress: true
+    port: 9000,
+    compress: true,
+    hot: false,
+    open: false,
+    historyApiFallback: true,
   },
   performance: {
     hints: false,
@@ -22,14 +28,19 @@ module.exports = {
   entry: {
     'main': './src/js/index.js'
   },
+  target: 'web',
   output: {
     filename: './[name].bundle.js',
     sourceMapFilename: './map/[id].[chunkhash].js.map',
     chunkFilename: './chunk/[id].[chunkhash].js',
     path: dist,
-    publicPath:""
+    library: {
+      type: 'umd'
+    },
+    globalObject: 'this'
   },
   resolve: {
+    // ブラウザ環境の場合、Node.js固有のモジュールに空のモックを提供
     fallback: {
       'crypto': require.resolve("crypto-browserify"),
       'vm': require.resolve("vm-browserify"),
@@ -39,12 +50,24 @@ module.exports = {
       'path': require.resolve("path-browserify")
     }
   },
+  module: {
+    rules: [
+      {
+        test: /\.css$/,
+        use: ['style-loader', 'css-loader']
+      }
+    ]
+  },
   plugins: [
     new HtmlWebpackPlugin({
       inject: true,
       chunks: ['main'],
       template: './src/html/index.html',
       filename: './index.html'
+    }),
+    new webpack.ProvidePlugin({
+      $: 'jquery',
+      jQuery: 'jquery'
     }),
     new CopyPlugin({
       patterns: [
