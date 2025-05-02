@@ -18,5 +18,21 @@ export const createSplitter = (sidebarElement) => {
     document.addEventListener('mouseup', onMouseUp);
   });
 
+  // タッチ操作対応
+  splitter.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const onTouchMove = (e2) => {
+      if (e2.touches && e2.touches.length > 0) {
+        sidebarElement.style.width = `${e2.touches[0].clientX}px`;
+      }
+    };
+    const onTouchEnd = () => {
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+    };
+    document.addEventListener('touchmove', onTouchMove);
+    document.addEventListener('touchend', onTouchEnd);
+  });
+
   return splitter;
 };
