@@ -56,6 +56,50 @@ export const createMenuBar = () => {
   runButton.classList.add('menu-button');
   runButton.innerHTML = '<span class="material-symbols-outlined">play_arrow</span> 実行';
 
+  // ヘルプメニューグループ
+  const helpGroup = document.createElement('div');
+  helpGroup.classList.add('menu-group');
+
+  // ヘルプボタン
+  const helpButton = document.createElement('button');
+  helpButton.id = 'help-button';
+  helpButton.classList.add('menu-button');
+  helpButton.innerHTML = '<span class="material-symbols-outlined">help</span> ヘルプ';
+
+  // ヘルプモーダル生成
+  const helpModal = document.createElement('div');
+  helpModal.id = 'help-modal';
+  helpModal.style.display = 'none';
+  helpModal.innerHTML = `
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <h2>ヘルプ・ライセンス情報</h2>
+      <ul>
+        <li><a href="https://github.com/nojaja/SQLite-WebClient" target="_blank">GitHubリポジトリ</a></li>
+      </ul>
+      <h3>使用ライブラリとライセンス</h3>
+      <ul>
+        <li><a href="https://www.npmjs.com/package/@sqlite.org/sqlite-wasm" target="_blank">@sqlite.org/sqlite-wasm</a> (Apache-2.0)</li>
+        <li><a href="https://www.npmjs.com/package/jquery" target="_blank">jQuery</a> (MIT)</li>
+        <li><a href="https://www.npmjs.com/package/datatables.net-dt" target="_blank">DataTables</a> (MIT)</li>
+        <li><a href="https://www.npmjs.com/package/dbgate-query-splitter" target="_blank">dbgate-query-splitter</a> (MIT)</li>
+      </ul>
+      <button id="close-help-modal">閉じる</button>
+    </div>
+  `;
+  document.body.appendChild(helpModal);
+
+  // ヘルプボタンイベント
+  helpButton.addEventListener('click', () => {
+    helpModal.style.display = '';
+  });
+  helpModal.querySelector('#close-help-modal').addEventListener('click', () => {
+    helpModal.style.display = 'none';
+  });
+  helpModal.querySelector('.modal-overlay').addEventListener('click', () => {
+    helpModal.style.display = 'none';
+  });
+
   // 要素を追加
   fileGroup.appendChild(newDbButton);
   fileGroup.appendChild(openDbButton);
@@ -64,9 +108,11 @@ export const createMenuBar = () => {
   queryGroup.appendChild(openQueryButton);
   queryGroup.appendChild(saveQueryButton);
   queryGroup.appendChild(runButton);
+  helpGroup.appendChild(helpButton);
 
   menuBar.appendChild(fileGroup);
   menuBar.appendChild(queryGroup);
-
+  menuBar.appendChild(helpGroup);
+  
   return menuBar;
 };
