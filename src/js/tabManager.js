@@ -81,6 +81,36 @@ export default class TabManager {
       this.messagesArea.innerHTML = '';
     }
     // --- 追加ここまで ---
+    // query-area生成
+    const mainArea = this.tabsContainer.parentElement;
+    // 既存のquery-areaを非表示
+    Array.from(mainArea.querySelectorAll('.query-area')).forEach(area => area.classList.remove('active'));
+    const queryArea = document.createElement('div');
+    queryArea.classList.add('query-area', 'active');
+    queryArea.id = `query-area-${tabId}`;
+    // クエリエディタ
+    const queryEditor = document.createElement('div');
+    queryEditor.id = 'query-editor';
+    queryEditor.classList.add('query-editor');
+    const editorTextarea = document.createElement('textarea');
+    editorTextarea.id = 'sql-editor';
+    editorTextarea.placeholder = 'SQLクエリを入力してください';
+    editorTextarea.value = '';
+    queryEditor.appendChild(editorTextarea);
+    queryArea.appendChild(queryEditor);
+    // queryTabsの直後に挿入
+    const afterTabs = this.tabsContainer.nextSibling;
+    mainArea.insertBefore(queryArea, afterTabs);
+    // rowSplitterをアクティブなquery-areaの直後に移動し、エディタをセット
+    const rowSplitter = mainArea.querySelector('.row-splitter');
+    if (rowSplitter) {
+      mainArea.insertBefore(rowSplitter, queryArea.nextSibling);
+      if (rowSplitter.setQueryEditor) rowSplitter.setQueryEditor(queryEditor);
+    }
+    // 既存のquery-areaは非表示
+    Array.from(mainArea.querySelectorAll('.query-area')).forEach(area => {
+      area.style.display = area.classList.contains('active') ? '' : 'none';
+    });
   }
 
   closeTab(tabId) {
@@ -92,6 +122,18 @@ export default class TabManager {
       this.activeTabId = null;
       const first = this.tabsContainer.querySelector('.query-tab');
       if (first) this.switchTab(first.dataset.tabId);
+    }
+    // query-area削除
+    const mainArea = this.tabsContainer.parentElement;
+    const area = mainArea.querySelector(`#query-area-${tabId}`);
+    if (area) area.remove();
+    // rowSplitterの位置も調整（残ったタブの直後へ）
+    const rowSplitter = mainArea.querySelector('.row-splitter');
+    const activeArea = mainArea.querySelector('.query-area.active');
+    if (rowSplitter && activeArea) {
+      mainArea.insertBefore(rowSplitter, activeArea.nextSibling);
+      const queryEditor = activeArea.querySelector('.query-editor');
+      if (rowSplitter.setQueryEditor && queryEditor) rowSplitter.setQueryEditor(queryEditor);
     }
   }
 
@@ -145,5 +187,19 @@ export default class TabManager {
     // Messagesも復元
     this.messagesArea.innerHTML = state.messages;
     this.activeTabId = tabId;
+    // query-area切り替え
+    const mainArea = this.tabsContainer.parentElement;
+    Array.from(mainArea.querySelectorAll('.query-area')).forEach(area => {
+      area.classList.toggle('active', area.id === `query-area-${tabId}`);
+      area.style.display = (area.id === `query-area-${tabId}`) ? '' : 'none';
+    });
+    // rowSplitterをアクティブなquery-areaの直後に移動し、エディタをセット
+    const activeArea = mainArea.querySelector(`#query-area-${tabId}`);
+    const rowSplitter = mainArea.querySelector('.row-splitter');
+    if (activeArea && rowSplitter) {
+      mainArea.insertBefore(rowSplitter, activeArea.nextSibling);
+      const queryEditor = activeArea.querySelector('.query-editor');
+      if (rowSplitter.setQueryEditor && queryEditor) rowSplitter.setQueryEditor(queryEditor);
+    }
   }
 }

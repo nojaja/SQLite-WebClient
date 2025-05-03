@@ -7,6 +7,7 @@ export const UI_IDS = {
   MAIN_AREA: 'main-area',
   QUERY_TABS: 'query-tabs',
   QUERY_EDITOR: 'query-editor',
+  RESULTS_AREA: 'results-area',
   RESULTS_GRID: 'results-grid',
   STATUS_BAR: 'status-bar',
   DB_TREE: 'db-tree'

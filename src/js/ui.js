@@ -2,11 +2,11 @@
 import { updateResultsGrid } from './ui/Results';
 import { showError, showSuccess } from './ui/Messages';
 // Sidebar機能を外部モジュールからインポート
-import { createSidebar, updateDatabaseTree } from './ui/Sidebar';
+import { createSidebar, updateDatabaseTree, setupDatasetTreeClickHandler } from './ui/Sidebar';
 // MenuBar機能を外部モジュールからインポート
 import { createMenuBar } from './ui/MenuBar';
 import { createStatusBar } from './ui/StatusBar';
-import { createResultsSection } from './ui/ImagesNotExists.js';
+import { createResultsSection, setupRegisterDatasetHandler } from './ui/ImagesNotExists.js';
 import { UI_IDS } from './ui/constants.js'; // Import UI_IDS from the new file
 import { createSplitter } from './ui/splitter.js'; // Import createSplitter
 import { createRowSplitter } from './ui/rowSplitter.js'; // Import createRowSplitter
@@ -49,6 +49,8 @@ export const createUI = () => {
   mainLayout.appendChild(sidebar);
   mainLayout.appendChild(splitter);
   mainLayout.appendChild(mainArea);
+  // Sidebarのデータセット名クリックハンドラをバインド
+  setTimeout(() => setupDatasetTreeClickHandler(), 0);
 
   // ステータスバーを作成
   const statusBar = createStatusBar();
@@ -86,6 +88,11 @@ const createMainArea = () => {
   initialTab.textContent = 'Query1';
   queryTabs.appendChild(initialTab);
 
+  // query-areaでラップ
+  const queryArea = document.createElement('div');
+  queryArea.classList.add('query-area', 'active');
+  queryArea.id = 'query-area-query1';
+  // クエリエディタ
   const queryEditor = document.createElement('div');
   queryEditor.id = UI_IDS.QUERY_EDITOR;
   queryEditor.classList.add('query-editor');
@@ -94,20 +101,23 @@ const createMainArea = () => {
   editorTextarea.placeholder = 'SQLクエリを入力してください';
   editorTextarea.value = '';
   queryEditor.appendChild(editorTextarea);
+  queryArea.appendChild(queryEditor);
 
   mainArea.appendChild(queryTabs);
-  mainArea.appendChild(queryEditor);
+  mainArea.appendChild(queryArea);
 
-  // クエリエディタと結果表示セクション間の水平スプリッター
-  // rowSplitterの作成ロジックを外部モジュール呼び出しに変更
-  const rowSplitter = createRowSplitter(queryEditor);
+  // rowSplitterは1つだけ生成し、アクティブなquery-areaの直後に配置
+  const rowSplitter = createRowSplitter();
   mainArea.appendChild(rowSplitter);
+  rowSplitter.setQueryEditor(queryEditor);
 
   // 結果表示タブ (Results/Messages) を ImagesNotExists.js から作成
-  const { resultsTabs, resultsGrid, messagesArea } = createResultsSection();
+  const { resultsArea, resultsTabs, messagesArea } = createResultsSection();
   mainArea.appendChild(resultsTabs);
-  mainArea.appendChild(resultsGrid);
+  mainArea.appendChild(resultsArea);
   mainArea.appendChild(messagesArea);
+  // 「データセットに登録」ボタンのイベントをバインド
+  setTimeout(() => setupRegisterDatasetHandler({ showSuccess, showError }), 0);
 
   return mainArea;
 };

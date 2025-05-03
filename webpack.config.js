@@ -42,6 +42,7 @@ module.exports = {
   resolve: {
     // ブラウザ環境の場合、Node.js固有のモジュールに空のモックを提供
     fallback: {
+      'buffer': require.resolve("buffer/"),
       'fs': false,
       'path': require.resolve("path-browserify")
     }
@@ -63,7 +64,8 @@ module.exports = {
     }),
     new webpack.ProvidePlugin({
       $: 'jquery',
-      jQuery: 'jquery'
+      jQuery: 'jquery',
+      Buffer: ['buffer', 'Buffer']
     }),
     new CopyPlugin({
       patterns: [
