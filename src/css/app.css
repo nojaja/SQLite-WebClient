@@ -170,6 +170,11 @@ body {
   font-size: 14px;
 }
 
+.query-editor textarea:focus {
+  outline: none;
+  box-shadow: none;
+}
+
 .results-container {
   flex: 1;
   display: flex;

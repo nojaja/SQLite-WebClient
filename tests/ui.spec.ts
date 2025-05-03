@@ -93,12 +93,12 @@ test.describe('画面構成確認', () => {
 
   test('タブ切替で Results と Messages の表示が切り替わること', async ({ page }) => {
     // 初期は Results
-    expect(await page.locator('#results-grid').evaluate(el => window.getComputedStyle(el).display)).not.toBe('none');
+    expect(await page.locator('#results-area').evaluate(el => window.getComputedStyle(el).display)).not.toBe('none');
     expect(await page.locator('#messages-area').evaluate(el => window.getComputedStyle(el).display)).toBe('none');
     // Messages タブをクリック
     await page.locator('.result-tab').nth(1).click();
     expect(await page.locator('#messages-area').evaluate(el => window.getComputedStyle(el).display)).not.toBe('none');
-    expect(await page.locator('#results-grid').evaluate(el => window.getComputedStyle(el).display)).toBe('none');
+    expect(await page.locator('#results-area').evaluate(el => window.getComputedStyle(el).display)).toBe('none');
   });
 
   test('テーブルクリックでSQL設定と実行結果がResultsに表示される', async ({ page }) => {
@@ -164,5 +164,75 @@ test.describe('画面構成確認', () => {
     //await triggersLabel.click();
     await expect(triggersLabel).toBeVisible();
     await expect(page.locator('.Triggers[data-name="trg_test"]')).toBeVisible();
+  });
+
+  test('初期テーブル作成（testテーブルが存在すること）', async ({ page }) => {
+    await page.goto('/');
+    // テーブル一覧に'test'が表示されるまで待つ
+    await expect(page.locator('.tree-label', { hasText: 'test' })).toBeVisible();
+    // SQLエディタでSELECTしてデータが返ること
+    await page.fill('#sql-editor', 'SELECT * FROM test;');
+    await page.click('#run-button');
+    // 初期データ2件が入っていること
+    const rows = await page.locator('#results-table tbody tr').count();
+    expect(rows).toBeGreaterThanOrEqual(2);
+  });
+
+  test('SELECT結果をデータセットに登録し__DATASET_STORE__に反映される', async ({ page }) => {
+    await page.goto('/');
+    // testテーブルのデータをSELECT
+    await page.fill('#sql-editor', 'SELECT * FROM test LIMIT 100;');
+    await page.click('#run-button');
+    // 「データセットに登録」ボタンをクリック
+    await page.click('#register-dataset-btn');
+    // ダイアログでデータセット名を入力
+    await page.evaluate(() => {
+      // promptをモックして自動入力
+      window.prompt = () => 'test_dataset';
+    });
+    // もう一度ボタンを押して登録
+    await page.click('#register-dataset-btn');
+    // __DATASET_STORE__にtest_datasetが登録されていることを確認
+    const exists = await page.evaluate(() => {
+      return !!window.__DATASET_STORE__ && !!window.__DATASET_STORE__['test_dataset'] && Array.isArray(window.__DATASET_STORE__['test_dataset'].rows);
+    });
+    expect(exists).toBe(true);
+    // データ件数も確認
+    const rowCount = await page.evaluate(() => window.__DATASET_STORE__['test_dataset'].rows.length);
+    expect(rowCount).toBeGreaterThanOrEqual(2);
+  });
+
+  test('参照データを使って複数行INSERTできる', async ({ page }) => {
+    await page.goto('/');
+    // testテーブルのデータをSELECTしてデータセット登録
+    await page.fill('#sql-editor', 'SELECT * FROM test LIMIT 100;');
+    await page.click('#run-button');
+    // 「データセットに登録」ボタンをクリック
+    await page.click('#register-dataset-btn');
+    await page.evaluate(() => { window.prompt = () => 'test_dataset'; });
+    await page.click('#register-dataset-btn');
+
+    // 新規タブを開く
+    await page.click('#new-query-button');
+    // test2テーブル作成
+    await page.fill('#sql-editor', 'CREATE TABLE IF NOT EXISTS test2 (col1 INTEGER PRIMARY KEY, col2 TEXT);');
+    await page.click('#run-button');
+
+    // 参照データプルダウンでtest_datasetを選択
+    const selectId = '#ref-dataset-select-query1';
+    await page.selectOption(selectId, 'test_dataset');
+
+    // test_datasetの内容をtest2にINSERT
+    await page.fill('#sql-editor', 'INSERT INTO test2 (col1, col2) VALUES ($col1, $col2);');
+    await page.click('#run-button');
+
+    // test2の内容を確認
+    await page.selectOption(selectId, 'なし');
+    await page.fill('#sql-editor', 'SELECT * FROM test2;');
+    await page.click('#run-button');
+    // test_datasetの件数とtest2の件数が一致すること
+    const dsCount = await page.evaluate(() => window.__DATASET_STORE__['test_dataset'].rows.length);
+    const t2Count = await page.locator('#results-table tbody tr').count();
+    expect(t2Count).toBe(dsCount);
   });
 });

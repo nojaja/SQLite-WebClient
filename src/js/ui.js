@@ -92,6 +92,37 @@ const createMainArea = () => {
   const queryArea = document.createElement('div');
   queryArea.classList.add('query-area', 'active');
   queryArea.id = 'query-area-query1';
+  // --- ここから追加 ---
+  // クエリメニューバー
+  const queryMenuBar = document.createElement('div');
+  queryMenuBar.classList.add('query-menu-bar');
+  queryMenuBar.id = 'query-menu-bar-query1';
+  // --- 参照データプルダウン追加 ---
+  const refLabel = document.createElement('label');
+  refLabel.textContent = '参照データ:';
+  refLabel.setAttribute('for', 'ref-dataset-select-query1');
+  refLabel.style.marginRight = '6px';
+  const refSelect = document.createElement('select');
+  refSelect.id = 'ref-dataset-select-query1';
+  refSelect.classList.add('ref-dataset-select');
+  // 「なし」初期値
+  const noneOpt = document.createElement('option');
+  noneOpt.value = '';
+  noneOpt.textContent = 'なし';
+  refSelect.appendChild(noneOpt);
+  // データセット名をoptionで追加
+  const dsStore = window.__DATASET_STORE__ || {};
+  Object.keys(dsStore).forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    refSelect.appendChild(opt);
+  });
+  queryMenuBar.appendChild(refLabel);
+  queryMenuBar.appendChild(refSelect);
+  // --- ここまで ---
+  queryArea.appendChild(queryMenuBar);
+  // --- ここまで追加 ---
   // クエリエディタ
   const queryEditor = document.createElement('div');
   queryEditor.id = UI_IDS.QUERY_EDITOR;
@@ -105,6 +136,10 @@ const createMainArea = () => {
 
   mainArea.appendChild(queryTabs);
   mainArea.appendChild(queryArea);
+
+  // query-areaは1つだけ生成し、タブ切り替え時に内容を保存・復元する
+  // 既存のquery-area生成ロジックはそのまま（初期タブ用）
+  // 新規タブ追加時や切り替え時はTabManagerが内容を保存・復元する
 
   // rowSplitterは1つだけ生成し、アクティブなquery-areaの直後に配置
   const rowSplitter = createRowSplitter();

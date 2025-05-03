@@ -20,6 +20,20 @@ export const setupEventHandlers = (ui, db, tabManager) => {
         return;
       }
 
+      // 参照データプルダウンの選択値取得
+      const activeQueryArea = editor.closest('.query-area');
+      let refRows = null;
+      if (activeQueryArea) {
+        const refSelect = activeQueryArea.querySelector('.ref-dataset-select');
+        if (refSelect && refSelect.value) {
+          const dsStore = window.__DATASET_STORE__ || {};
+          const ds = dsStore[refSelect.value];
+          if (ds && Array.isArray(ds.rows)) {
+            refRows = ds.rows;
+          }
+        }
+      }
+
       // 既存のResultsタブ・テーブルを全てクリア（Messages以外）
       const tabs = document.querySelector('.results-tabs');
       const resultsGrid = document.getElementById(UI_IDS.RESULTS_GRID);
@@ -36,7 +50,36 @@ export const setupEventHandlers = (ui, db, tabManager) => {
       let anyResult = false;
       let messages = [];
 
-      const results = db.executeQuery(query);
+      let results = [];
+      if (refRows && refRows.length > 0) {
+        // データセットの各rowでprepare/bind/stepを繰り返し実行
+        const resultsArr = [];
+        const stmt = db.db.prepare(query); 
+        for (const row of refRows) {
+          const dollarRow = Object.fromEntries(
+            Object.entries(row).map(([k, v]) => [k.startsWith('$') ? k : `$${k}`, v])
+          );
+          stmt.bind(dollarRow);
+          // SELECTかどうかで処理分岐
+          if (/^\s*select/i.test(query)) {
+            while (stmt.step()) {
+              resultsArr.push(stmt.getAsObject());
+            }
+          } else {
+            stmt.step(); // INSERT/UPDATE/DELETE等
+          }
+          stmt.reset();
+        }
+        stmt.finalize();
+        if (/^\s*select/i.test(query)) {
+          results = [{ success: true, results: resultsArr, columns: resultsArr.length > 0 ? Object.keys(resultsArr[0]) : [] }];
+        } else {
+          results = [{ success: true, info: {} }];
+        }
+      } else {
+        // 通常通り1回だけ実行
+        results = db.executeQuery(query);
+      }
       let idx = 0;
       for (const result of results) {
         const tableId = idx === 0 ? 'results-table' : `results-table-${idx+1}`;
@@ -88,8 +131,8 @@ export const setupEventHandlers = (ui, db, tabManager) => {
         if (msgTab) {
           tabs.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
           msgTab.classList.add('active');
-          resultsGrid.style.display = 'none';
-          document.getElementById('messages-area').style.display = '';
+          // results-areaの表示切り替えで十分なので、resultsGridのdisplay操作は不要
+          // resultsGrid.style.display = 'none'; // ← これを削除
         }
       } else if (anySuccess) {
         ui.showSuccess(`クエリを実行しました: ${results.length} 件`);

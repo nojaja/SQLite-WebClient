@@ -203,6 +203,30 @@ export const updateDatasetTree = () => {
     itemElem.innerHTML = `<div class="tree-label dataset" data-name="${name}"><span class="material-symbols-outlined icon">dataset</span> ${name}</div>`;
     datasetTreeView.appendChild(itemElem);
   });
+
+  // --- 参照データプルダウンも全タブ分更新 ---
+  const selects = document.querySelectorAll('.ref-dataset-select');
+  selects.forEach(select => {
+    const current = select.value;
+    // 一旦全option削除
+    while (select.firstChild) select.removeChild(select.firstChild);
+    // なし
+    const noneOpt = document.createElement('option');
+    noneOpt.value = '';
+    noneOpt.textContent = 'なし';
+    select.appendChild(noneOpt);
+    // データセット名
+    const dsStore = window.__DATASET_STORE__ || {};
+    Object.keys(dsStore).forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      select.appendChild(opt);
+    });
+    // 可能なら元の選択値を復元
+    select.value = current;
+    if (!select.value) select.value = '';
+  });
 };
 
 // Sidebarのデータセット名クリックでResultsタブ追加＆内容復元
