@@ -245,43 +245,40 @@ export function setupDatasetTreeClickHandler() {
     const resultsGrid = document.getElementById('results-grid');
     if (!tabs || !resultsGrid) return;
     // 既に同名タブがあればアクティブ化のみ
-    let resTab = Array.from(tabs.querySelectorAll('.result-tab')).find(t => t.textContent === name);
+    let resTab = Array.from(tabs.querySelectorAll('.result-tab')).find(t => t.textContent.replace('×','').trim() === name);
     if (!resTab) {
-      // タブ追加
-      resTab = document.createElement('div');
-      resTab.classList.add('result-tab');
-      resTab.textContent = name;
-      resTab.dataset.resultsId = `results-table-dataset-${name}`;
-      const msgTab = tabs.querySelector('.result-tab:last-child');
-      tabs.insertBefore(resTab, msgTab);
-      // テーブル追加
-      const table = document.createElement('table');
-      table.id = resTab.dataset.resultsId;
-      table.classList.add('display', 'dataTable');
-      // thead
-      const thead = document.createElement('thead');
-      const tr = document.createElement('tr');
-      dataset.columns.forEach(col => {
-        const th = document.createElement('th');
-        th.textContent = col;
-        tr.appendChild(th);
-      });
-      thead.appendChild(tr);
-      table.appendChild(thead);
-      // tbody
-      const tbody = document.createElement('tbody');
-      dataset.rows.forEach(row => {
+      // addResultsを使ってタブ・テーブル追加（×ボタン付き）
+      const { addResults } = require('./ImagesNotExists.js');
+      addResults(name, `results-table-dataset-${name}`);
+      resTab = Array.from(tabs.querySelectorAll('.result-tab')).find(t => t.textContent.replace('×','').trim() === name);
+      // テーブル内容をセット
+      const table = document.getElementById(`results-table-dataset-${name}`);
+      if (table) {
+        table.innerHTML = '';
+        // thead
+        const thead = document.createElement('thead');
         const tr = document.createElement('tr');
         dataset.columns.forEach(col => {
-          const td = document.createElement('td');
-          td.textContent = row[col] != null ? row[col] : '';
-          tr.appendChild(td);
+          const th = document.createElement('th');
+          th.textContent = col;
+          tr.appendChild(th);
         });
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      table.style.display = 'none';
-      resultsGrid.appendChild(table);
+        thead.appendChild(tr);
+        table.appendChild(thead);
+        // tbody
+        const tbody = document.createElement('tbody');
+        dataset.rows.forEach(row => {
+          const tr = document.createElement('tr');
+          dataset.columns.forEach(col => {
+            const td = document.createElement('td');
+            td.textContent = row[col] != null ? row[col] : '';
+            tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        table.style.display = 'none';
+      }
     }
     // タブ切り替え
     tabs.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));

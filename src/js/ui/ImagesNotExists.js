@@ -53,28 +53,17 @@ export const createResultsSection = () => {
   // Results/Messagesタブ
   const resultsTabs = document.createElement('div');
   resultsTabs.classList.add('results-tabs');
-  const resTab = document.createElement('div');
-  resTab.classList.add('result-tab', 'active');
-  resTab.textContent = 'Results';
+  // 初期はMessagesタブのみ
   const msgTab = document.createElement('div');
-  msgTab.classList.add('result-tab');
+  msgTab.classList.add('result-tab', 'active');
   msgTab.textContent = 'Messages';
-  resultsTabs.appendChild(resTab);
   resultsTabs.appendChild(msgTab);
 
   // グリッドエリア
   const resultsGrid = document.createElement('div');
   resultsGrid.id = UI_IDS.RESULTS_GRID;
   resultsGrid.classList.add('results-grid');
-  // DataTables 用の table 要素を常に用意
-  const resultsTable = document.createElement('table');
-  resultsTable.id = 'results-table';
-  // DataTablesのスタイルを適用するクラスを追加
-  resultsTable.classList.add('display', 'dataTable');
-  // 初期状態で空のtbodyを作成しておく
-  const emptyTbody = document.createElement('tbody');
-  resultsTable.appendChild(emptyTbody);
-  resultsGrid.appendChild(resultsTable);
+  // 初期はテーブルを生成しない
 
   // results-areaでラップ
   const resultsArea = document.createElement('div');
@@ -86,7 +75,7 @@ export const createResultsSection = () => {
   const messagesArea = document.createElement('div');
   messagesArea.id = 'messages-area';
   messagesArea.classList.add('messages-area');
-  messagesArea.style.display = 'none';
+  messagesArea.style.display = '';
 
   // resultsArea, resultsTabs, messagesAreaを返す
   return { resultsArea, resultsTabs, messagesArea };
@@ -96,13 +85,52 @@ export const createResultsSection = () => {
 export const addResults = (label, tableId = null) => {
   const tabs = document.querySelector('.results-tabs');
   const resultsGrid = document.getElementById(UI_IDS.RESULTS_GRID);
-  if (!tabs || !resultsGrid) return;
+  if (!tabs || !resultsGrid) return null;
 
   // タブ作成
   const resTab = document.createElement('div');
   resTab.classList.add('result-tab');
   resTab.textContent = label;
   resTab.dataset.resultsId = tableId || `results-table-${label}`;
+  // closeボタン追加
+  const close = document.createElement('span');
+  close.classList.add('close-tab');
+  close.textContent = '×';
+  close.addEventListener('click', e => {
+    e.stopPropagation();
+    // タブ削除前に親を保持
+    const tabs = resTab.parentElement;
+    resTab.remove();
+    if (!tabs) return;
+    // テーブル削除
+    const tbl = document.getElementById(resTab.dataset.resultsId);
+    if (tbl) tbl.remove();
+    // 他のタブをアクティブ化（なければMessages）
+    const remainTabs = Array.from(tabs.querySelectorAll('.result-tab')).filter(t => t !== resTab && t.textContent !== 'Messages');
+    if (remainTabs.length > 0) {
+      remainTabs[0].classList.add('active');
+      const resultsGrid = document.getElementById(UI_IDS.RESULTS_GRID);
+      if (resultsGrid) {
+        Array.from(resultsGrid.children).forEach(tbl => {
+          tbl.style.display = (tbl.id === remainTabs[0].dataset.resultsId) ? '' : 'none';
+        });
+      }
+      // Resultsエリア表示
+      const resultsArea = document.getElementById(UI_IDS.RESULTS_AREA);
+      const messagesArea = document.getElementById('messages-area');
+      if (resultsArea) resultsArea.style.display = '';
+      if (messagesArea) messagesArea.style.display = 'none';
+    } else {
+      // Messagesタブをアクティブ
+      const msgTab = tabs.querySelector('.result-tab:last-child');
+      if (msgTab) msgTab.classList.add('active');
+      const resultsArea = document.getElementById(UI_IDS.RESULTS_AREA);
+      const messagesArea = document.getElementById('messages-area');
+      if (resultsArea) resultsArea.style.display = 'none';
+      if (messagesArea) messagesArea.style.display = '';
+    }
+  });
+  resTab.appendChild(close);
   // Messagesタブの直前に挿入
   const msgTab = tabs.querySelector('.result-tab:last-child');
   tabs.insertBefore(resTab, msgTab);

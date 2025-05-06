@@ -44,7 +44,8 @@ export default class TabManager {
     this.states[tabId] = {
       query: '',
       refDataset: '',
-      results: this.defaultResultsHTML,
+      engine: 'SQL',
+      results: '', // Resultsタブ・テーブルは初期表示しない
       messages: this.defaultMessagesHTML
     };
     this.switchTab(tabId);
@@ -58,7 +59,10 @@ export default class TabManager {
       // 参照データプルダウンの値も保存
       const refSelect = document.querySelector('.ref-dataset-select');
       if (refSelect) this.states[this.activeTabId].refDataset = refSelect.value;
-      // Resultsタブ・テーブル構成を保存
+      // 実行エンジンの値も保存
+      const engineSelect = document.querySelector('.engine-select');
+      if (engineSelect) this.states[this.activeTabId].engine = engineSelect.value;
+      // Resultsタブ・テーブル構成を保存（データセットタブも含む）
       const resultsTabs = document.querySelector('.results-tabs');
       const resultsGrid = document.getElementById('results-grid');
       this.states[this.activeTabId].results = JSON.stringify({
@@ -77,6 +81,9 @@ export default class TabManager {
     // 参照データプルダウン復元
     const refSelect = document.querySelector('.ref-dataset-select');
     if (refSelect) refSelect.value = state.refDataset || '';
+    // 実行エンジン復元
+    const engineSelect = document.querySelector('.engine-select');
+    if (engineSelect) engineSelect.value = state.engine || 'SQL';
     // Resultsタブ・テーブルを復元
     if (state.results) {
       let parsed;
@@ -94,7 +101,19 @@ export default class TabManager {
         this.resultsArea.innerHTML = state.results;
       }
     } else {
-      this.resultsArea.innerHTML = '';
+      // state.resultsが空の場合はResultsタブ・テーブルを全てクリアし、Messagesタブのみ表示
+      const resultsTabs = document.querySelector('.results-tabs');
+      const resultsGrid = document.getElementById('results-grid');
+      if (resultsTabs) {
+        resultsTabs.innerHTML = '';
+        const msgTab = document.createElement('div');
+        msgTab.classList.add('result-tab', 'active');
+        msgTab.textContent = 'Messages';
+        resultsTabs.appendChild(msgTab);
+      }
+      if (resultsGrid) {
+        resultsGrid.innerHTML = '';
+      }
     }
     this.messagesArea.innerHTML = state.messages;
     this.activeTabId = tabId;
@@ -108,7 +127,14 @@ export default class TabManager {
     if (this.activeTabId === tabId) {
       this.activeTabId = null;
       const first = this.tabsContainer.querySelector('.query-tab');
-      if (first) this.switchTab(first.dataset.tabId);
+      const mainArea = document.getElementById('main-area');
+      if (first) {
+        if (mainArea) mainArea.style.display = '';
+        this.switchTab(first.dataset.tabId);
+      } else {
+        // すべてのタブが閉じられた場合、main-areaを非表示にする
+        if (mainArea) mainArea.style.display = 'none';
+      }
     }
   }
 }

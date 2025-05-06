@@ -86,6 +86,16 @@ const createMainArea = () => {
   initialTab.classList.add('query-tab', 'active');
   initialTab.dataset.tabId = 'query1';
   initialTab.textContent = 'Query1';
+  // closeボタン追加
+  const close = document.createElement('span');
+  close.classList.add('close-tab');
+  close.textContent = '×';
+  close.addEventListener('click', e => {
+    e.stopPropagation();
+    // TabManagerインスタンスはwindow.tabManagerで参照可能とする
+    if (window.tabManager) window.tabManager.closeTab('query1');
+  });
+  initialTab.appendChild(close);
   queryTabs.appendChild(initialTab);
 
   // query-areaでラップ
@@ -120,6 +130,24 @@ const createMainArea = () => {
   });
   queryMenuBar.appendChild(refLabel);
   queryMenuBar.appendChild(refSelect);
+  // --- 実行エンジンプルダウン追加 ---
+  const engineLabel = document.createElement('label');
+  engineLabel.textContent = '実行エンジン:';
+  engineLabel.setAttribute('for', 'engine-select-query1');
+  engineLabel.style.marginLeft = '16px';
+  engineLabel.style.marginRight = '6px';
+  const engineSelect = document.createElement('select');
+  engineSelect.id = 'engine-select-query1';
+  engineSelect.classList.add('engine-select');
+  const engines = ['SQL', 'jsonata'];
+  engines.forEach(engine => {
+    const opt = document.createElement('option');
+    opt.value = engine;
+    opt.textContent = engine;
+    engineSelect.appendChild(opt);
+  });
+  queryMenuBar.appendChild(engineLabel);
+  queryMenuBar.appendChild(engineSelect);
   // --- ここまで ---
   queryArea.appendChild(queryMenuBar);
   // --- ここまで追加 ---

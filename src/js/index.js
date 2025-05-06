@@ -27,11 +27,18 @@ const main = async () => {
     resultsId: 'results-grid',
     messagesId: 'messages-area'
   });
+  window.tabManager = tabManager;
 
   // 即時バインド: 新規Queryボタンでタブ追加
   const newQueryBtn = document.getElementById('new-query-button');
   if (newQueryBtn) {
-    newQueryBtn.addEventListener('click', () => tabManager.addTab('Query'));
+    newQueryBtn.addEventListener('click', () => {
+      const mainArea = document.getElementById('main-area');
+      if (mainArea && mainArea.style.display === 'none') {
+        mainArea.style.display = '';
+      }
+      tabManager.addTab('Query');
+    });
   }
   // 即時バインド: Results/Messagesタブ切り替え
   setupResultsMessagesToggle(); // Replaced the event listener block with this function call
