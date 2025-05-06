@@ -1,6 +1,8 @@
 import { UI_IDS } from './ui/constants.js'; // Updated import path
-import { addResults } from './ui/ImagesNotExists.js';
+//import { addResults } from './ui/ResultsSection.js';
 import { updateResultsGrid } from './ui/Results.js';
+import { setMessages } from './ui/MessagesArea.js';
+import { getSqlEditor, setSqlEditorValue } from './ui/QueryArea.js';
 // events.js - イベントハンドラーを設定するモジュール
 
 // イベントハンドラーのセットアップ
@@ -9,15 +11,37 @@ export const setupEventHandlers = (ui, db, tabManager) => {
   let currentDbPath = 'Untitled.db';
 
   // クエリ実行処理 (DBオブジェクトを使用して常に実行)
-  const handleQueryExecution = () => {
+  const handleQueryExecution = async () => {
     try {
-      const editor = document.getElementById('sql-editor');
+      const editor = getSqlEditor();
       if (!editor) throw new Error('SQLエディタが見つかりません');
 
       const query = editor.value.trim();
       if (!query) {
-        ui.showError('実行するSQLクエリを入力してください');
+        const msg = '実行するクエリを入力してください';
+        ui.showError(msg);
+        setMessages(msg);
         return;
+      }
+      // 実行エンジンの選択値取得
+      const activeQueryArea = editor.closest('.query-area');
+      let refRows = null;
+      let refDatasetName = '';
+      let engine = 'SQL';
+      if (activeQueryArea) {
+        const refSelect = activeQueryArea.querySelector('.ref-dataset-select');
+        if (refSelect && refSelect.value) {
+          const dsStore = window.__DATASET_STORE__ || {};
+          const ds = dsStore[refSelect.value];
+          if (ds && Array.isArray(ds.rows)) {
+            refRows = ds.rows;
+            refDatasetName = refSelect.value;
+          }
+        }
+        const engineSelect = activeQueryArea.querySelector('.engine-select');
+        if (engineSelect && engineSelect.value) {
+          engine = engineSelect.value;
+        }
       }
 
       // 既存のResultsタブ・テーブルを全てクリア（Messages以外）
@@ -30,21 +54,92 @@ export const setupEventHandlers = (ui, db, tabManager) => {
       for (const tbl of Array.from(resultsGrid.children)) {
         if (tbl.id.startsWith('results-table')) tbl.remove();
       }
-      // 必要な数だけタブ・テーブルを再生成
+      let results = [];
+      let messages = [];
       let hasResults = false;
       let anySuccess = false;
       let anyResult = false;
-      let messages = [];
-
-      const results = db.executeQuery(query);
+      if (engine === 'jsonata') {
+        // jsonata実行
+        if (!refDatasetName || !refRows) {
+          const msg = 'jsonata実行には参照データセットの選択が必要です';
+          ui.showError(msg);
+          setMessages(msg);
+          return;
+        }
+        try {
+          const jsonata = (await import('jsonata')).default;
+          const expr = jsonata(query);
+          const jsonataResult = await expr.evaluate(refRows);
+          // 結果をテーブル形式に整形
+          let columns = [];
+          let rows = [];
+          if (Array.isArray(jsonataResult)) {
+            if (jsonataResult.length > 0 && typeof jsonataResult[0] === 'object' && !Array.isArray(jsonataResult[0])) {
+              columns = Object.keys(jsonataResult[0]);
+              rows = jsonataResult;
+            } else {
+              columns = ['value'];
+              rows = jsonataResult.map(v => ({ value: v }));
+            }
+          } else if (typeof jsonataResult === 'object' && jsonataResult !== null) {
+            columns = Object.keys(jsonataResult);
+            rows = [jsonataResult];
+          } else {
+            columns = ['value'];
+            rows = [{ value: jsonataResult }];
+          }
+          results = [{ success: true, results: rows, columns }];
+          messages.push('jsonata式を実行しました');
+        } catch (err) {
+          results = [{ success: false, error: err.message }];
+          messages.push('jsonata実行エラー: ' + err.message);
+        }
+      } else {
+        // ...既存のSQL実行処理...
+        if (refRows && refRows.length > 0) {
+          // データセットの各rowでprepare/bind/stepを繰り返し実行
+          const resultsArr = [];
+          const stmt = db.db.prepare(query);
+          for (const row of refRows) {
+            const dollarRow = Object.fromEntries(
+              Object.entries(row).map(([k, v]) => [k.startsWith('$') ? k : `$${k}`, v])
+            );
+            stmt.bind(dollarRow);
+          // SELECTかどうかで処理分岐
+            if (/^\s*select/i.test(query)) {
+              while (stmt.step()) {
+                resultsArr.push(stmt.getAsObject());
+              }
+            } else {
+              stmt.step(); // INSERT/UPDATE/DELETE等
+            }
+            stmt.reset();
+          }
+          stmt.finalize();
+          if (/^\s*select/i.test(query)) {
+            results = [{ success: true, results: resultsArr, columns: resultsArr.length > 0 ? Object.keys(resultsArr[0]) : [] }];
+          } else {
+            results = [{ success: true, info: {} }];
+          }
+        } else {
+          // 通常通り1回だけ実行
+          results = db.executeQuery(query);
+        }
+      }
+      // ...既存の結果表示処理...
       let idx = 0;
       for (const result of results) {
-        const tableId = idx === 0 ? 'results-table' : `results-table-${idx+1}`;
-        const tabLabel = results.length === 1 ? 'Results' : `Results${idx+1}`;
-
+        // 結果がある場合のみResultsタブを生成
         if (result.success && result.results && result.results.length > 0) {
-          hasResults = true;
-          addResults(tabLabel, tableId);
+          const tableId = idx === 0 ? 'results-table' : `results-table-${idx+1}`;
+          const tabLabel = results.length === 1 ? 'Results' : `Results${idx+1}`;
+          try {
+            addResults(tabLabel, tableId);
+            
+          } catch (error) {
+            console.error('Resultsタブの追加エラー:', error);
+          }
           updateResultsGrid(result, tableId);
           anySuccess = true;
           anyResult = true;
@@ -61,41 +156,40 @@ export const setupEventHandlers = (ui, db, tabManager) => {
         }
         idx++;
       }
-      if (hasResults) {
-        // --- 追加: 最初のResultタブをアクティブに ---
-        const tabs = document.querySelector('.results-tabs');
-        if (tabs) {
-          const firstResultTab = Array.from(tabs.querySelectorAll('.result-tab')).find(tab => tab.textContent === 'Results' || tab.textContent === 'Results1');
-          if (firstResultTab) {
-            tabs.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
-            firstResultTab.classList.add('active');
-            const resultsGrid = document.getElementById(UI_IDS.RESULTS_GRID);
-            Array.from(resultsGrid.children).forEach(tbl => {
-              tbl.style.display = (tbl.id === 'results-table' || tbl.id === 'results-table-1') ? '' : 'none';
-            });
-          }
-        }
-        // --- 追加ここまで ---
-      }
       // Messagesタブにログ・エラーを表示
-      const messagesArea = document.getElementById('messages-area');
-      if (messagesArea) {
-        messagesArea.innerHTML = messages.map(m => `<div>${m}</div>`).join('');
-      }
+      setMessages(messages);
+      // 結果が無い場合はMessagesタブのみアクティブ・Resultsタブは生成しない
       if (!anyResult) {
-        // 結果が無い場合はMessagesタブをアクティブに
-        const msgTab = tabs.querySelector('.result-tab:last-child');
+        const tabs = document.querySelector('.results-tabs');
+        const msgTab = tabs && tabs.querySelector('.result-tab:last-child');
         if (msgTab) {
           tabs.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
           msgTab.classList.add('active');
-          resultsGrid.style.display = 'none';
-          document.getElementById('messages-area').style.display = '';
         }
       } else if (anySuccess) {
-        ui.showSuccess(`クエリを実行しました: ${results.length} 件`);
+        // 最初のResultタブをアクティブに
+        const tabs = document.querySelector('.results-tabs');
+        const resultsGrid = document.getElementById(UI_IDS.RESULTS_GRID);
+        // 先頭のResults系タブをアクティブに
+        const firstResultTab = Array.from(tabs.querySelectorAll('.result-tab'))
+          .find(tab => tab.textContent.trim().startsWith('Results'));
+        if (firstResultTab) {
+          tabs.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
+          firstResultTab.classList.add('active');
+          Array.from(resultsGrid.children).forEach(tbl => {
+            tbl.style.display = (tbl.id === firstResultTab.dataset.resultsId) ? '' : 'none';
+          });
+          // Resultsエリア表示
+          const resultsArea = document.getElementById('results-area');
+          const messagesArea = document.getElementById('messages-area');
+          if (resultsArea) resultsArea.style.display = '';
+          if (messagesArea) messagesArea.style.display = 'none';
+        }
       }
     } catch (error) {
-      ui.showError(`クエリ実行中にエラーが発生しました: ${error.message}`);
+      const msg = `クエリ実行中にエラーが発生しました: ${error.message}`;
+      ui.showError(msg);
+      setMessages(msg);
       console.error('クエリ実行エラー:', error);
     }
   };
@@ -206,13 +300,8 @@ export const setupEventHandlers = (ui, db, tabManager) => {
         if (!sqlFile) return;
         console.log('選択されたSQLファイル:', sqlFile.name);
         const sqlContent = await readFileAsText(sqlFile);
-        const editor = document.getElementById('sql-editor');
-        if (editor) {
-          editor.value = sqlContent;
-          ui.showSuccess(`SQLファイル '${sqlFile.name}' を読み込みました`);
-        } else {
-          throw new Error('SQLエディタが見つかりません');
-        }
+        setSqlEditorValue(sqlContent);
+        ui.showSuccess(`SQLファイル '${sqlFile.name}' を読み込みました`);
       } catch (error) {
         ui.showError(`SQLファイル読み込みエラー: ${error.message}`);
         console.error('SQLファイル読み込みエラー:', error);
@@ -225,7 +314,7 @@ export const setupEventHandlers = (ui, db, tabManager) => {
   if (saveQueryButton) {
     saveQueryButton.addEventListener('click', () => {
       try {
-        const editor = document.getElementById('sql-editor');
+        const editor = getSqlEditor();
         if (!editor) throw new Error('SQLエディタが見つかりません');
 
         const query = editor.value;

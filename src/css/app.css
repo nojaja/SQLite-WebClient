@@ -63,7 +63,7 @@ body {
 
 .tree-title {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start; /* 左寄せ */
   align-items: center;
   font-weight: bold;
   padding: 8px;
@@ -168,6 +168,11 @@ body {
   padding: 10px;
   font-family: 'Courier New', monospace;
   font-size: 14px;
+}
+
+.query-editor textarea:focus {
+  outline: none;
+  box-shadow: none;
 }
 
 .results-container {
@@ -286,6 +291,12 @@ table.dataTable tbody td {
   color: black;
 }
 
+/* 追加ボタンのアイコン色 */
+#add-dataset-button .material-symbols-outlined {
+  color: black;
+}
+
+
 /* ヘルプモーダル用スタイル */
 #help-modal {
   position: fixed;
@@ -333,6 +344,35 @@ table.dataTable tbody td {
 #help-modal a {
   color: #0078d7;
   text-decoration: underline;
+}
+
+.panel-area {
+  flex: 1;
+  padding: 0; /* パディングを 0 に変更 */
+  overflow-y: auto; /* 縦スクロールをコンテナで管理 */
+  overflow-x: auto; /* 横スクロール */
+  background-color: white;
+  display: flex; /* DataTablesコンテナがflexアイテムとして高さを占めるように */
+  flex-direction: column; /* DataTablesコンテナを縦に配置 */
+}
+
+.results-area {
+  flex: 1;
+  padding: 0; /* パディングを 0 に変更 */
+  overflow-y: auto; /* 縦スクロールをコンテナで管理 */
+  overflow-x: auto; /* 横スクロール */
+  background-color: white;
+  display: flex; /* DataTablesコンテナがflexアイテムとして高さを占めるように */
+  flex-direction: column; /* DataTablesコンテナを縦に配置 */
+}
+
+.results-menu-bar {
+  display: flex;
+  align-items: center;
+  background: #555;
+  border-bottom: 1px solid #ddd;
+  padding: 4px 4px;
+  height: 3vh;
 }
 
 /* --- モバイル対応: メニュー文字非表示・スプリッタ幅拡大 --- */

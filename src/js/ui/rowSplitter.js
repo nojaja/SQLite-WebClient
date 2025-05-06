@@ -1,13 +1,17 @@
 // rowSplitter.js - 水平スプリッター要素を作成するモジュール
 
-export const createRowSplitter = (queryEditorElement) => {
+let currentQueryEditor = null;
+
+export const createRowSplitter = () => {
   const rowSplitter = document.createElement('div');
   rowSplitter.classList.add('row-splitter');
 
+  // ドラッグ時のqueryEditorElementを都度取得
   rowSplitter.addEventListener('mousedown', (e) => {
     e.preventDefault();
+    const queryEditorElement = currentQueryEditor || document.querySelector('.query-area.active .query-editor');
+    if (!queryEditorElement) return;
     const startY = e.clientY;
-    // queryEditorElement を直接参照するように変更
     const startHeight = queryEditorElement.getBoundingClientRect().height;
     const onMouseMove = (e2) => {
       const dy = e2.clientY - startY;
@@ -24,7 +28,8 @@ export const createRowSplitter = (queryEditorElement) => {
   // タッチ操作対応
   rowSplitter.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    if (!e.touches || e.touches.length === 0) return;
+    const queryEditorElement = currentQueryEditor || document.querySelector('.query-area.active .query-editor');
+    if (!e.touches || e.touches.length === 0 || !queryEditorElement) return;
     const startY = e.touches[0].clientY;
     const startHeight = queryEditorElement.getBoundingClientRect().height;
     const onTouchMove = (e2) => {
@@ -40,6 +45,11 @@ export const createRowSplitter = (queryEditorElement) => {
     document.addEventListener('touchmove', onTouchMove);
     document.addEventListener('touchend', onTouchEnd);
   });
+
+  // アクティブなquery-editorをセット
+  rowSplitter.setQueryEditor = (editorElem) => {
+    currentQueryEditor = editorElem;
+  };
 
   return rowSplitter;
 };

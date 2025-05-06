@@ -5,10 +5,9 @@ import '../css/app.css';
 import 'datatables.net-dt/css/dataTables.dataTables.min.css';
 import 'datatables.net-fixedheader-dt/css/fixedHeader.dataTables.min.css';
 import { createUI } from './ui.js';
-import { setupEventHandlers } from './events.js';
 import SQLiteManager from './SQLiteManager.js';
 import TabManager from './tabManager.js';
-import { setupResultsMessagesToggle } from './ui/ImagesNotExists.js'; // Import added
+import { setupEventHandlers } from './events.js';
 
 // DataTablesプラグインの初期化
 window.$ = window.jQuery = $;
@@ -27,14 +26,19 @@ const main = async () => {
     resultsId: 'results-grid',
     messagesId: 'messages-area'
   });
+  window.tabManager = tabManager;
 
   // 即時バインド: 新規Queryボタンでタブ追加
   const newQueryBtn = document.getElementById('new-query-button');
   if (newQueryBtn) {
-    newQueryBtn.addEventListener('click', () => tabManager.addTab('Query'));
+    newQueryBtn.addEventListener('click', () => {
+      const mainArea = document.getElementById('main-area');
+      if (mainArea && mainArea.style.display === 'none') {
+        mainArea.style.display = '';
+      }
+      tabManager.addTab('Query');
+    });
   }
-  // 即時バインド: Results/Messagesタブ切り替え
-  setupResultsMessagesToggle(); // Replaced the event listener block with this function call
 
   // データベース機能を SQLiteManager でセットアップ (print, printErr を指定)
   const db = await SQLiteManager.initialize(null, { print: console.log, printErr: console.error });
@@ -49,6 +53,9 @@ const main = async () => {
 
   console.log('SQLite Sampleの起動が完了しました！');
 };
+
+// データセットストア（グローバル）
+window.__DATASET_STORE__ = window.__DATASET_STORE__ || {};
 
 // アプリケーションを実行
 (async () => {

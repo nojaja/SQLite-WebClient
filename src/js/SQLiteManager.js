@@ -131,8 +131,12 @@ class SQLiteManager {
     // ヘルパーメソッド：バインドオブジェクトをフィルタリングしてバインドする
     filteredBindObject(stmt, bindObject) {
         if (bindObject && typeof bindObject === 'object') {
+            // すべてのキー名を$付きに変換
+            const dollarBindObject = Object.fromEntries(
+                Object.entries(bindObject).map(([key, value]) => [key.startsWith('$') ? key : `$${key}`, value])
+            );
             return Object.fromEntries(
-                Object.entries(bindObject).filter(([key, _]) => 0 !== this.sqlite3.capi.sqlite3_bind_parameter_index(stmt.pointer, key))
+                Object.entries(dollarBindObject).filter(([key, _]) => 0 !== this.sqlite3.capi.sqlite3_bind_parameter_index(stmt.pointer, key))
             );
         } else {
             return bindObject;
@@ -149,13 +153,13 @@ class SQLiteManager {
         }
     }
 
-  executeQuery(query) {
+  executeQuery(query, bind) {
     const results = [];
     try {
       const statements = this.splitStatements(query);
       for (const stmtSql of statements) {
     try {
-          const [result] = this.db.exec(stmtSql);
+          const [result] = this.db.exec(stmtSql, bind);
           if (result && result.columns && result.columns.length > 0) {
             const resultmap = result.values.map(vals => Object.fromEntries(result.columns.map((c, i) => [c, vals[i]])));
             results.push({ success: true, results: resultmap, columns: result.columns });

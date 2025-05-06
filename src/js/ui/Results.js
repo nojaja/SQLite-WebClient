@@ -39,3 +39,21 @@ export const updateResultsGrid = (data, tableId = 'results-table') => {
   });
   table.appendChild(tbody);
 };
+
+// 現在アクティブなResultsタブのテーブルからデータを取得
+export function getCurrentResults() {
+  const tabs = document.querySelector('.results-tabs');
+  if (!tabs) return null;
+  const activeTab = tabs.querySelector('.result-tab.active');
+  if (!activeTab) return null;
+  const tableId = activeTab.dataset.resultsId || 'results-table';
+  const table = document.getElementById(tableId);
+  if (!table) return null;
+  // カラム名取得
+  const columns = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent);
+  // 行データ取得
+  const rows = Array.from(table.querySelectorAll('tbody tr')).map(tr =>
+    Array.from(tr.querySelectorAll('td')).map(td => td.textContent)
+  );
+  return { columns, rows };
+}

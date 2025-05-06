@@ -27,81 +27,42 @@ export default class TabManager {
   }
 
   addTab(label) {
-    console.log('TabManager.addTab called with', label);
-    const count = this.tabsContainer.querySelectorAll('.query-tab').length;
     const tabId = `query${this.tabSerial++}`;
     // ヘッダータブ生成
     const tab = document.createElement('div');
     tab.classList.add('query-tab');
     tab.dataset.tabId = tabId;
     tab.textContent = `${label}${tabId.replace('query','')}`;
-    // タブクリックで切り替え
     tab.addEventListener('click', () => this.switchTab(tabId));
-    // 閉じるボタン
     const close = document.createElement('span');
     close.classList.add('close-tab');
     close.textContent = '×';
     close.addEventListener('click', e => { e.stopPropagation(); this.closeTab(tabId); });
     tab.appendChild(close);
     this.tabsContainer.appendChild(tab);
-    console.log('TabManager: after append, tab count =', this.tabsContainer.querySelectorAll('.query-tab').length);
-    // 状態初期化: エリアHTMLを保持しておく
+    // 状態初期化
     this.states[tabId] = {
       query: '',
-      results: this.defaultResultsHTML,
+      refDataset: '',
+      engine: 'SQL',
+      results: '', // Resultsタブ・テーブルは初期表示しない
       messages: this.defaultMessagesHTML
     };
-    // 切り替え
     this.switchTab(tabId);
-    // --- 追加: 新規タブ時にUIも初期化 ---
-    // エディタを空に
-    this.editor.value = '';
-    // Resultsグリッドを空テーブルに
-    if (this.resultsArea) {
-      this.resultsArea.innerHTML = '';
-      // results-table, results-table-2...なども全削除
-      Array.from(this.resultsArea.querySelectorAll('table')).forEach(tbl => tbl.remove());
-      // Resultsタブ・テーブルを必ず1つだけ再生成
-      const tabs = document.querySelector('.results-tabs');
-      const resultsGrid = document.getElementById('results-grid');
-      // Resultsタブを全削除
-      Array.from(tabs.querySelectorAll('.result-tab')).forEach(tab => {
-        if (tab.textContent === 'Results') tab.remove();
-      });
-      // Results系テーブルを全削除
-      Array.from(resultsGrid.children).forEach(tbl => {
-        if (tbl.id && tbl.id.startsWith('results-table')) tbl.remove();
-      });
-      // Resultsタブ・テーブルを1つだけ再生成
-      const { addResults } = require('./ui/ImagesNotExists.js');
-      addResults('Results', 'results-table');
-    }
-    // Messagesエリアも空に
-    if (this.messagesArea) {
-      this.messagesArea.innerHTML = '';
-    }
-    // --- 追加ここまで ---
-  }
-
-  closeTab(tabId) {
-    const tab = this.tabsContainer.querySelector(`[data-tab-id="${tabId}"]`);
-    if (!tab) return;
-    delete this.states[tabId];
-    tab.remove();
-    if (this.activeTabId === tabId) {
-      this.activeTabId = null;
-      const first = this.tabsContainer.querySelector('.query-tab');
-      if (first) this.switchTab(first.dataset.tabId);
-    }
   }
 
   switchTab(tabId) {
-    console.log('TabManager.switchTab called for', tabId);
     if (!this.states[tabId]) return;
     // 旧アクティブ保存
     if (this.activeTabId) {
       this.states[this.activeTabId].query = this.editor.value;
-      // Resultsタブ・テーブル構成を保存
+      // 参照データプルダウンの値も保存
+      const refSelect = document.querySelector('.ref-dataset-select');
+      if (refSelect) this.states[this.activeTabId].refDataset = refSelect.value;
+      // 実行エンジンの値も保存
+      const engineSelect = document.querySelector('.engine-select');
+      if (engineSelect) this.states[this.activeTabId].engine = engineSelect.value;
+      // Resultsタブ・テーブル構成を保存（データセットタブも含む）
       const resultsTabs = document.querySelector('.results-tabs');
       const resultsGrid = document.getElementById('results-grid');
       this.states[this.activeTabId].results = JSON.stringify({
@@ -117,33 +78,67 @@ export default class TabManager {
     // コンテンツ復元
     const state = this.states[tabId];
     this.editor.value = state.query;
+    // 参照データプルダウン復元
+    const refSelect = document.querySelector('.ref-dataset-select');
+    if (refSelect) refSelect.value = state.refDataset || '';
+    // 実行エンジン復元
+    const engineSelect = document.querySelector('.engine-select');
+    if (engineSelect) engineSelect.value = state.engine || 'SQL';
     // Resultsタブ・テーブルを復元
     if (state.results) {
+      const resultsMenuBar = document.querySelector('.results-menu-bar');
+      if (resultsMenuBar) resultsMenuBar.style.display = 'flex';
       let parsed;
-      try {
-        parsed = JSON.parse(state.results);
-      } catch {
-        parsed = null;
-      }
+      try { parsed = JSON.parse(state.results); } catch { parsed = null; }
       if (parsed && parsed.tabs !== undefined && parsed.grid !== undefined) {
         const resultsTabs = document.querySelector('.results-tabs');
         const resultsGrid = document.getElementById('results-grid');
         if (resultsTabs && resultsGrid) {
           resultsTabs.innerHTML = parsed.tabs;
           resultsGrid.innerHTML = parsed.grid;
-          // タブ切替イベント再バインド
-          const { setupResultsMessagesToggle } = require('./ui/ImagesNotExists.js');
-          setupResultsMessagesToggle();
+          //const { setupResultsMessagesToggle } = require('./ui/ResultsSection.js');
+          //setupResultsMessagesToggle();
         }
       } else {
-        // 旧形式（HTML文字列のみ）
         this.resultsArea.innerHTML = state.results;
       }
     } else {
-      this.resultsArea.innerHTML = '';
+      const resultsMenuBar = document.querySelector('.results-menu-bar');
+      if (resultsMenuBar) resultsMenuBar.style.display = 'none';
+      // state.resultsが空の場合はResultsタブ・テーブルを全てクリアし、Messagesタブのみ表示
+      const resultsTabs = document.querySelector('.results-tabs');
+      const resultsGrid = document.getElementById('results-grid');
+      if (resultsTabs) {
+        resultsTabs.innerHTML = '';
+        const msgTab = document.createElement('div');
+        msgTab.classList.add('result-tab', 'active');
+        msgTab.textContent = 'Messages';
+        resultsTabs.appendChild(msgTab);
+      }
+      if (resultsGrid) {
+        resultsGrid.innerHTML = '';
+      }
     }
-    // Messagesも復元
     this.messagesArea.innerHTML = state.messages;
     this.activeTabId = tabId;
+  }
+
+  closeTab(tabId) {
+    const tab = this.tabsContainer.querySelector(`[data-tab-id="${tabId}"]`);
+    if (!tab) return;
+    delete this.states[tabId];
+    tab.remove();
+    if (this.activeTabId === tabId) {
+      this.activeTabId = null;
+      const first = this.tabsContainer.querySelector('.query-tab');
+      const mainArea = document.getElementById('main-area');
+      if (first) {
+        if (mainArea) mainArea.style.display = '';
+        this.switchTab(first.dataset.tabId);
+      } else {
+        // すべてのタブが閉じられた場合、main-areaを非表示にする
+        if (mainArea) mainArea.style.display = 'none';
+      }
+    }
   }
 }
