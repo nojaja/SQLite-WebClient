@@ -1,4 +1,6 @@
 import { UI_IDS } from './constants.js'; // Updated import path
+import { hideMessagesArea } from './MessagesArea.js';
+import { getActiveSqlEditor } from './QueryArea.js';
 
 // Sidebar（複数ツリー対応）を作成する関数
 export const createSidebar = () => {
@@ -181,8 +183,7 @@ export const updateDatabaseTree = (schema) => {
     if (!label) return;
     const tableName = label.dataset.name;
     // アクティブなquery-area内のsql-editorを取得
-    const activeQueryArea = document.querySelector('.query-area.active');
-    const editor = activeQueryArea && activeQueryArea.querySelector('textarea#sql-editor');
+    const editor = getActiveSqlEditor();
     if (editor) {
       editor.value = `SELECT * FROM ${tableName} LIMIT 100`;
       editor.focus();
@@ -248,7 +249,6 @@ export function setupDatasetTreeClickHandler() {
     let resTab = Array.from(tabs.querySelectorAll('.result-tab')).find(t => t.textContent.replace('×','').trim() === name);
     if (!resTab) {
       // addResultsを使ってタブ・テーブル追加（×ボタン付き）
-      const { addResults } = require('./ImagesNotExists.js');
       addResults(name, `results-table-dataset-${name}`);
       resTab = Array.from(tabs.querySelectorAll('.result-tab')).find(t => t.textContent.replace('×','').trim() === name);
       // テーブル内容をセット
@@ -289,8 +289,7 @@ export function setupDatasetTreeClickHandler() {
     });
     // Resultsグリッド表示、Messages非表示
     resultsGrid.style.display = '';
-    const messagesArea = document.getElementById('messages-area');
-    if (messagesArea) messagesArea.style.display = 'none';
+    hideMessagesArea();
     // メニューバー表示
     const resultsMenuBar = document.querySelector('.results-menu-bar');
     if (resultsMenuBar) resultsMenuBar.style.display = 'flex';

@@ -1,6 +1,8 @@
 import { UI_IDS } from './ui/constants.js'; // Updated import path
-import { addResults } from './ui/ImagesNotExists.js';
+//import { addResults } from './ui/ResultsSection.js';
 import { updateResultsGrid } from './ui/Results.js';
+import { setMessages } from './ui/MessagesArea.js';
+import { getSqlEditor, setSqlEditorValue } from './ui/QueryArea.js';
 // events.js - イベントハンドラーを設定するモジュール
 
 // イベントハンドラーのセットアップ
@@ -11,15 +13,14 @@ export const setupEventHandlers = (ui, db, tabManager) => {
   // クエリ実行処理 (DBオブジェクトを使用して常に実行)
   const handleQueryExecution = async () => {
     try {
-      const editor = document.getElementById('sql-editor');
+      const editor = getSqlEditor();
       if (!editor) throw new Error('SQLエディタが見つかりません');
 
       const query = editor.value.trim();
       if (!query) {
         const msg = '実行するクエリを入力してください';
         ui.showError(msg);
-        const messagesArea = document.getElementById('messages-area');
-        messagesArea.innerHTML = `<div>${msg}</div>`;
+        setMessages(msg);
         return;
       }
       // 実行エンジンの選択値取得
@@ -63,8 +64,7 @@ export const setupEventHandlers = (ui, db, tabManager) => {
         if (!refDatasetName || !refRows) {
           const msg = 'jsonata実行には参照データセットの選択が必要です';
           ui.showError(msg);
-          const messagesArea = document.getElementById('messages-area');
-          messagesArea.innerHTML = `<div>${msg}</div>`;
+          setMessages(msg);
           return;
         }
         try {
@@ -134,7 +134,12 @@ export const setupEventHandlers = (ui, db, tabManager) => {
         if (result.success && result.results && result.results.length > 0) {
           const tableId = idx === 0 ? 'results-table' : `results-table-${idx+1}`;
           const tabLabel = results.length === 1 ? 'Results' : `Results${idx+1}`;
-          addResults(tabLabel, tableId);
+          try {
+            addResults(tabLabel, tableId);
+            
+          } catch (error) {
+            console.error('Resultsタブの追加エラー:', error);
+          }
           updateResultsGrid(result, tableId);
           anySuccess = true;
           anyResult = true;
@@ -152,10 +157,7 @@ export const setupEventHandlers = (ui, db, tabManager) => {
         idx++;
       }
       // Messagesタブにログ・エラーを表示
-      const messagesArea = document.getElementById('messages-area');
-      if (messagesArea) {
-        messagesArea.innerHTML = messages.map(m => `<div>${m}</div>`).join('');
-      }
+      setMessages(messages);
       // 結果が無い場合はMessagesタブのみアクティブ・Resultsタブは生成しない
       if (!anyResult) {
         const tabs = document.querySelector('.results-tabs');
@@ -187,8 +189,7 @@ export const setupEventHandlers = (ui, db, tabManager) => {
     } catch (error) {
       const msg = `クエリ実行中にエラーが発生しました: ${error.message}`;
       ui.showError(msg);
-      const messagesArea = document.getElementById('messages-area');
-      messagesArea.innerHTML = `<div>${msg}</div>`;
+      setMessages(msg);
       console.error('クエリ実行エラー:', error);
     }
   };
@@ -299,13 +300,8 @@ export const setupEventHandlers = (ui, db, tabManager) => {
         if (!sqlFile) return;
         console.log('選択されたSQLファイル:', sqlFile.name);
         const sqlContent = await readFileAsText(sqlFile);
-        const editor = document.getElementById('sql-editor');
-        if (editor) {
-          editor.value = sqlContent;
-          ui.showSuccess(`SQLファイル '${sqlFile.name}' を読み込みました`);
-        } else {
-          throw new Error('SQLエディタが見つかりません');
-        }
+        setSqlEditorValue(sqlContent);
+        ui.showSuccess(`SQLファイル '${sqlFile.name}' を読み込みました`);
       } catch (error) {
         ui.showError(`SQLファイル読み込みエラー: ${error.message}`);
         console.error('SQLファイル読み込みエラー:', error);
@@ -318,7 +314,7 @@ export const setupEventHandlers = (ui, db, tabManager) => {
   if (saveQueryButton) {
     saveQueryButton.addEventListener('click', () => {
       try {
-        const editor = document.getElementById('sql-editor');
+        const editor = getSqlEditor();
         if (!editor) throw new Error('SQLエディタが見つかりません');
 
         const query = editor.value;

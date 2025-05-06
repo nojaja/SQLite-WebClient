@@ -86,6 +86,8 @@ export default class TabManager {
     if (engineSelect) engineSelect.value = state.engine || 'SQL';
     // Resultsタブ・テーブルを復元
     if (state.results) {
+      const resultsMenuBar = document.querySelector('.results-menu-bar');
+      if (resultsMenuBar) resultsMenuBar.style.display = 'flex';
       let parsed;
       try { parsed = JSON.parse(state.results); } catch { parsed = null; }
       if (parsed && parsed.tabs !== undefined && parsed.grid !== undefined) {
@@ -94,13 +96,15 @@ export default class TabManager {
         if (resultsTabs && resultsGrid) {
           resultsTabs.innerHTML = parsed.tabs;
           resultsGrid.innerHTML = parsed.grid;
-          const { setupResultsMessagesToggle } = require('./ui/ImagesNotExists.js');
-          setupResultsMessagesToggle();
+          //const { setupResultsMessagesToggle } = require('./ui/ResultsSection.js');
+          //setupResultsMessagesToggle();
         }
       } else {
         this.resultsArea.innerHTML = state.results;
       }
     } else {
+      const resultsMenuBar = document.querySelector('.results-menu-bar');
+      if (resultsMenuBar) resultsMenuBar.style.display = 'none';
       // state.resultsが空の場合はResultsタブ・テーブルを全てクリアし、Messagesタブのみ表示
       const resultsTabs = document.querySelector('.results-tabs');
       const resultsGrid = document.getElementById('results-grid');

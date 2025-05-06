@@ -346,6 +346,16 @@ table.dataTable tbody td {
   text-decoration: underline;
 }
 
+.panel-area {
+  flex: 1;
+  padding: 0; /* パディングを 0 に変更 */
+  overflow-y: auto; /* 縦スクロールをコンテナで管理 */
+  overflow-x: auto; /* 横スクロール */
+  background-color: white;
+  display: flex; /* DataTablesコンテナがflexアイテムとして高さを占めるように */
+  flex-direction: column; /* DataTablesコンテナを縦に配置 */
+}
+
 .results-area {
   flex: 1;
   padding: 0; /* パディングを 0 に変更 */

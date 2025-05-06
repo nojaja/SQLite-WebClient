@@ -23,6 +23,10 @@ test.describe('画面構成確認', () => {
   });
 
   test('結果表示グリッドが表示される', async ({ page }) => {
+    // まずクエリを実行してResultsタブを生成
+    await page.fill('#sql-editor', 'SELECT 1;');
+    await page.click('#run-button');
+    
     await expect(page.locator('#results-grid').first()).toBeVisible();
   });
 
@@ -244,6 +248,7 @@ test.describe('画面構成確認', () => {
     // testテーブルのデータをSELECTしてデータセット登録
     await page.fill('#sql-editor', 'SELECT * FROM test LIMIT 100;');
     await page.click('#run-button');
+    await page.click('.result-tab', { timeout: 15000 });
     await page.click('#register-dataset-btn');
     await page.evaluate(() => { window.prompt = () => 'test_dataset'; });
     await page.click('#register-dataset-btn');
