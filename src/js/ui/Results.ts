@@ -1,5 +1,5 @@
 import $ from 'jquery';
-import { UI_IDS } from './constants.js'; // Updated import path
+import { UI_IDS } from './constants'; // Updated import path
 // DataTablesプラグインを初期化
 import 'datatables.net-dt';
 import 'datatables.net-dt/css/dataTables.dataTables.min.css';

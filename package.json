@@ -7,6 +7,8 @@
     "build": "cross-env NODE_OPTIONS=--max_old_space_size=2048 NODE_ENV=production webpack",
     "dev": "cross-env NODE_OPTIONS=--max_old_space_size=2048 webpack --watch",
     "start": "cross-env NODE_OPTIONS=--max_old_space_size=2048 webpack serve",
+    "serve": "cross-env NODE_OPTIONS=--max_old_space_size=2048 webpack serve",
+    "typecheck": "tsc --noEmit",
     "test:playwright": "playwright test"
   },
   "keywords": [],
@@ -21,6 +23,10 @@
     "cross-env": "^7.0.3",
     "css-loader": "^7.1.2",
     "style-loader": "^4.0.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.8.3",
+    "@types/jquery": "^3.5.32",
+    "@types/node": "^22.15.18",
     "playwright": "^1.52.0",
     "@playwright/test": "^1.27.2"
   },

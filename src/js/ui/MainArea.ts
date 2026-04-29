@@ -1,7 +1,7 @@
-import { UI_IDS } from './constants.js';
-import { createRowSplitter } from './rowSplitter.js';
-import { createQueryArea } from './QueryArea.js';
-import { createPanelArea } from './PanelArea.js';
+import { UI_IDS } from './constants';
+import { createRowSplitter } from './rowSplitter';
+import { createQueryArea } from './QueryArea';
+import { createPanelArea } from './PanelArea';
 
 // メインコンテンツエリアを作成する関数
 export const createMainArea = () => {

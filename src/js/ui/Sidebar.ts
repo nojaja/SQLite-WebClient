@@ -1,6 +1,6 @@
-import { UI_IDS } from './constants.js';
-import { getActiveSqlEditor } from './QueryArea.js';
-import { DATASET_DB_ALIAS, listDatasetTables, setEditorQueryForTable } from '../datasetDb.js';
+import { UI_IDS } from './constants';
+import { getActiveSqlEditor } from './QueryArea';
+import { DATASET_DB_ALIAS, listDatasetTables, setEditorQueryForTable } from '../datasetDb';
 
 // Sidebar（複数ツリー対応）を作成する関数
 export const createSidebar = () => {
@@ -265,7 +265,7 @@ export function setupDatasetUploadHandler({ db, showSuccess, showError, onDatase
       try {
         const file = input.files && input.files[0];
         if (!file) return;
-        const { importCsvFileAsDataset } = await import('../datasetDb.js');
+        const { importCsvFileAsDataset } = await import('../datasetDb');
         const tableName = await importCsvFileAsDataset(db, file);
         showSuccess && showSuccess(`データセット「${tableName}」を登録しました`);
         onDatasetChanged && onDatasetChanged();

@@ -1,4 +1,4 @@
-import { UI_IDS } from './constants.js'; // Updated import path
+import { UI_IDS } from './constants'; // Updated import path
 // MenuBarView: メニューバーのUI生成のみを担当
 export const createMenuBarView = () => {
     const menuBar = document.createElement('div');

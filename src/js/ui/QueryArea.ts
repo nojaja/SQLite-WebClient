@@ -1,4 +1,4 @@
-import { UI_IDS } from './constants.js';
+import { UI_IDS } from './constants';
 
 // query-area（クエリエディタ部分）を作成する関数
 export const createQueryArea = () => {

@@ -6,9 +6,9 @@ import { createSidebar, updateDatabaseTree, setupDatasetTreeClickHandler } from 
 // MenuBar機能を外部モジュールからインポート
 import { createMenuBar } from './ui/MenuBar';
 import { createStatusBar, showError, showSuccess } from './ui/StatusBar';
-import { UI_IDS } from './ui/constants.js'; // Import UI_IDS from the new file
-import { createSplitter } from './ui/splitter.js'; // Import createSplitter
-import { createMainArea } from './ui/MainArea.js';
+import { UI_IDS } from './ui/constants'; // Import UI_IDS from the new file
+import { createSplitter } from './ui/splitter'; // Import createSplitter
+import { createMainArea } from './ui/MainArea';
 
 // UIを作成する関数
 export const createUI = () => {

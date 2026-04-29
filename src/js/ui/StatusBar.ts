@@ -1,4 +1,4 @@
-import { UI_IDS } from './constants.js';
+import { UI_IDS } from './constants';
 
 // ステータスバーを作成する関数
 export const createStatusBar = () => {

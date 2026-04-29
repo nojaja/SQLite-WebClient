@@ -82,7 +82,7 @@ export default class TabManager {
         if (resultsTabs && resultsGrid) {
           resultsTabs.innerHTML = parsed.tabs;
           resultsGrid.innerHTML = parsed.grid;
-          //const { setupResultsMessagesToggle } = require('./ui/ResultsSection.js');
+          //const { setupResultsMessagesToggle } = require('./ui/ResultsSection');
           //setupResultsMessagesToggle();
         }
       } else {

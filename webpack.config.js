@@ -26,7 +26,7 @@ module.exports = {
     maxAssetSize: 512000
   },
   entry: {
-    'main': './src/js/index.js'
+    'main': './src/js/index.ts'
   },
   target: 'web',
   output: {
@@ -40,6 +40,7 @@ module.exports = {
     globalObject: 'this'
   },
   resolve: {
+    extensions: ['.ts', '.tsx', '.js'],
     // ブラウザ環境の場合、Node.js固有のモジュールに空のモックを提供
     fallback: {
       'buffer': require.resolve("buffer/"),
@@ -49,6 +50,16 @@ module.exports = {
   },
   module: {
     rules: [
+      {
+        test: /\.tsx?$/,
+        use: {
+          loader: 'ts-loader',
+          options: {
+            transpileOnly: true
+          }
+        },
+        exclude: /node_modules/
+      },
       {
         test: /\.css$/,
         use: ['style-loader', 'css-loader']

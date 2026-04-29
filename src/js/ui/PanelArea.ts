@@ -1,8 +1,8 @@
 // PanelArea.js
-import { UI_IDS } from './constants.js';
-import * as PanelAreaView from './PanelAreaView.js';
-import * as ResultsArea from './ResultsArea.js';
-import * as MessagesArea from './MessagesArea.js';
+import { UI_IDS } from './constants';
+import * as PanelAreaView from './PanelAreaView';
+import * as ResultsArea from './ResultsArea';
+import * as MessagesArea from './MessagesArea';
 
 // panel-area（results-tabs, results-area, messages-areaをまとめてラップ）を生成する関数
 export function createPanelArea() {

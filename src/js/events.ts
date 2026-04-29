@@ -1,11 +1,11 @@
-import { UI_IDS } from './ui/constants.js'; // Updated import path
-//import { addResults } from './ui/ResultsSection.js';
-import { updateResultsGrid } from './ui/Results.js';
-import { setMessages } from './ui/MessagesArea.js';
-import { getSqlEditor, setSqlEditorValue } from './ui/QueryArea.js';
-import { setupRegisterDatasetHandler } from './ui/ResultsArea.js';
-import { setupDatasetUploadHandler, updateDatasetTree } from './ui/Sidebar.js';
-import { DATASET_DB_ALIAS, deleteDatasetTable, ensureDatasetDatabase } from './datasetDb.js';
+import { UI_IDS } from './ui/constants'; // Updated import path
+//import { addResults } from './ui/ResultsSection';
+import { updateResultsGrid } from './ui/Results';
+import { setMessages } from './ui/MessagesArea';
+import { getSqlEditor, setSqlEditorValue } from './ui/QueryArea';
+import { setupRegisterDatasetHandler } from './ui/ResultsArea';
+import { setupDatasetUploadHandler, updateDatasetTree } from './ui/Sidebar';
+import { DATASET_DB_ALIAS, deleteDatasetTable, ensureDatasetDatabase } from './datasetDb';
 // events.js - イベントハンドラーを設定するモジュール
 
 // イベントハンドラーのセットアップ
