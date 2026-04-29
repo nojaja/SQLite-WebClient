@@ -43,8 +43,6 @@ export default class TabManager {
     // 状態初期化
     this.states[tabId] = {
       query: '',
-      refDataset: '',
-      engine: 'SQL',
       results: '', // Resultsタブ・テーブルは初期表示しない
       messages: this.defaultMessagesHTML
     };
@@ -56,12 +54,6 @@ export default class TabManager {
     // 旧アクティブ保存
     if (this.activeTabId) {
       this.states[this.activeTabId].query = this.editor.value;
-      // 参照データプルダウンの値も保存
-      const refSelect = document.querySelector('.ref-dataset-select');
-      if (refSelect) this.states[this.activeTabId].refDataset = refSelect.value;
-      // 実行エンジンの値も保存
-      const engineSelect = document.querySelector('.engine-select');
-      if (engineSelect) this.states[this.activeTabId].engine = engineSelect.value;
       // Resultsタブ・テーブル構成を保存（データセットタブも含む）
       const resultsTabs = document.querySelector('.results-tabs');
       const resultsGrid = document.getElementById('results-grid');
@@ -78,12 +70,6 @@ export default class TabManager {
     // コンテンツ復元
     const state = this.states[tabId];
     this.editor.value = state.query;
-    // 参照データプルダウン復元
-    const refSelect = document.querySelector('.ref-dataset-select');
-    if (refSelect) refSelect.value = state.refDataset || '';
-    // 実行エンジン復元
-    const engineSelect = document.querySelector('.engine-select');
-    if (engineSelect) engineSelect.value = state.engine || 'SQL';
     // Resultsタブ・テーブルを復元
     if (state.results) {
       const resultsMenuBar = document.querySelector('.results-menu-bar');

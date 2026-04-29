@@ -68,6 +68,8 @@ class SQLiteManager {
         }
         // データベースを作成
         this.db = new this.sqlite3.oo1.DB(this.currentFilename, "c");
+        // 接続を張り直したら attached 管理も初期化する
+        this._attachedFiles = {};
         // sqlite3_instanceにoriginalプロパティを作成
         this.original = { db: {} };
 
@@ -177,18 +179,90 @@ class SQLiteManager {
     }
   }
 
-  getDatabaseSchema() {
-    const sql = `SELECT type, name FROM sqlite_master WHERE type IN ('table','view','index','trigger') ORDER BY type,name`;
-    const [rows] = this.db.exec(sql);
-    const schema = { tables: [], views: [], indexes: [], triggers: [] };
-    rows.values.forEach(vals => {
-      const type = vals[0], name = vals[1];
-      if (type === 'table') schema.tables.push(name);
-      if (type === 'view') schema.views.push(name);
-      if (type === 'index') schema.indexes.push(name);
-      if (type === 'trigger') schema.triggers.push(name);
-    });
+  // エイリアス名バリデーション（SQL インジェクション対策）
+  static _validateAlias(alias) {
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(alias)) {
+      throw new Error(`無効なエイリアス名です: "${alias}" (英数字・アンダースコアのみ、先頭は英字またはアンダースコア)`);
+    }
+  }
+
+  /**
+   * 追加 DB をアタッチする
+   * @param {string} alias - スキーマ名（英数字・アンダースコアのみ）
+   * @param {Uint8Array|null} data - DB バイナリデータ（null の場合は空 DB を作成）
+   */
+  attachDatabase(alias, data) {
+    SQLiteManager._validateAlias(alias);
+    const filename = `attached_${alias}_${(0xffffffff * Math.random() >>> 0)}`;
+    if (data && data.length) {
+      this.sqlite3.capi.sqlite3_js_vfs_create_file('unix', filename, data, data.length);
+    }
+    this.original.db.exec.call(this.db, { sql: `ATTACH DATABASE '${filename}' AS "${alias}"` });
+    if (!this._attachedFiles) this._attachedFiles = {};
+    this._attachedFiles[alias] = filename;
+    return alias;
+  }
+
+  /** アタッチ済み DB をデタッチする */
+  detachDatabase(alias) {
+    SQLiteManager._validateAlias(alias);
+    this.original.db.exec.call(this.db, { sql: `DETACH DATABASE "${alias}"` });
+    if (this._attachedFiles) delete this._attachedFiles[alias];
+  }
+
+  /** PRAGMA database_list の結果を返す */
+  listAttachedDatabases() {
+    const result = this.db.exec('PRAGMA database_list');
+    if (!result || !result[0]) return [];
+    return result[0].values.map(vals => ({
+      seq: vals[0],
+      name: vals[1],
+      file: vals[2]
+    }));
+  }
+
+  hasAttachedDatabase(alias) {
+    return this.listAttachedDatabases().some(dbInfo => dbInfo.name === alias);
+  }
+
+  exportAttachedDatabase(alias) {
+    SQLiteManager._validateAlias(alias);
+    if (alias === 'main') return this.export();
+    const filename = this._attachedFiles && this._attachedFiles[alias];
+    if (!filename) {
+      throw new Error(`アタッチ済みDBが見つかりません: ${alias}`);
+    }
+    const attachedDb = new this.sqlite3.oo1.DB(filename, 'c');
+    try {
+      return this.sqlite3.capi.sqlite3_js_db_export(attachedDb);
+    } finally {
+      attachedDb.close();
+    }
+  }
+
+  getDatabaseSchema(schemaName = 'main') {
+    const sql = `SELECT type, name FROM "${schemaName}".sqlite_master WHERE type IN ('table','view','index','trigger') ORDER BY type,name`;
+    const schema = { alias: schemaName, tables: [], views: [], indexes: [], triggers: [] };
+    try {
+      const [rows] = this.db.exec(sql);
+      if (!rows || !rows.values) return schema;
+      rows.values.forEach(vals => {
+        const type = vals[0], name = vals[1];
+        if (type === 'table') schema.tables.push(name);
+        if (type === 'view') schema.views.push(name);
+        if (type === 'index') schema.indexes.push(name);
+        if (type === 'trigger') schema.triggers.push(name);
+      });
+    } catch (_) {
+      // スキーマ取得失敗時は空を返す
+    }
     return schema;
+  }
+
+  /** 全アタッチ DB（temp を除く）のスキーマ配列を返す */
+  getAllDatabaseSchemas() {
+    const dbs = this.listAttachedDatabases().filter(d => d.name !== 'temp');
+    return dbs.map(d => this.getDatabaseSchema(d.name));
   }
 
   getTableStructure(tableName) {

@@ -1,6 +1,6 @@
-import { UI_IDS } from './constants.js'; // Updated import path
-import { hideMessagesArea } from './MessagesArea.js';
+import { UI_IDS } from './constants.js';
 import { getActiveSqlEditor } from './QueryArea.js';
+import { DATASET_DB_ALIAS, listDatasetTables, setEditorQueryForTable } from '../datasetDb.js';
 
 // Sidebar（複数ツリー対応）を作成する関数
 export const createSidebar = () => {
@@ -10,7 +10,7 @@ export const createSidebar = () => {
 
   // --- Databasesツリー ---
   const dbTreeBlock = document.createElement('div');
-  dbTreeBlock.classList.add('tree-block');
+  dbTreeBlock.classList.add('tree-block', 'databases-tree-block');
 
   const dbTreeTitle = document.createElement('div');
   dbTreeTitle.classList.add('tree-title');
@@ -51,7 +51,7 @@ export const createSidebar = () => {
 
   // --- データセットツリー ---
   const datasetTreeBlock = document.createElement('div');
-  datasetTreeBlock.classList.add('tree-block');
+  datasetTreeBlock.classList.add('tree-block', 'dataset-tree-block');
 
   const datasetTreeTitle = document.createElement('div');
   datasetTreeTitle.classList.add('tree-title');
@@ -69,44 +69,6 @@ export const createSidebar = () => {
   dsUploadBtn.title = 'データセット追加';
   dsUploadBtn.innerHTML = '<span class="material-symbols-outlined">upload_file</span>';
   datasetTreeTitle.appendChild(dsUploadBtn);
-
-  // 追加ボタンのCSV読み込み機能をここでバインド
-  dsUploadBtn.addEventListener('click', async () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.csv,text/csv';
-    input.style.display = 'none';
-    document.body.appendChild(input);
-    input.addEventListener('change', async (e) => {
-      const file = input.files && input.files[0];
-      if (!file) return;
-      const text = await file.text();
-      try {
-        const parse = (await import('csv-parse/browser/esm')).parse;
-        parse(text, { columns: true, skip_empty_lines: true }, (err, output) => {
-          if (err) {
-            alert('CSVの読み込みに失敗しました');
-            return;
-          }
-          if (!output.length) {
-            alert('CSVにデータがありません');
-            return;
-          }
-          const columns = Object.keys(output[0]);
-          const rows = output;
-          const name = prompt('データセット名を入力してください', file.name.replace(/\.csv$/i, ''));
-          if (!name) return;
-          window.__DATASET_STORE__[name] = { columns, rows };
-          alert(`データセット「${name}」を登録しました`);
-          if (typeof updateDatasetTree === 'function') updateDatasetTree();
-        });
-      } catch (e) {
-        alert('csv-parseの読み込みに失敗しました');
-      }
-      document.body.removeChild(input);
-    });
-    input.click();
-  });
 
   datasetTreeBlock.appendChild(datasetTreeTitle);
 
@@ -133,178 +95,175 @@ export const createSidebar = () => {
   return sidebar;
 };
 
-// データベースツリービューを更新する関数
-export const updateDatabaseTree = (schema) => {
+// データベースツリービューを更新する関数（スキーマ配列対応）
+export const updateDatabaseTree = (schemas) => {
   const treeView = document.getElementById(UI_IDS.DB_TREE);
+  const previousOpenState = captureDatabaseOpenState(treeView);
   treeView.innerHTML = '';
-  if (!schema) return;
+  if (!schemas) return;
 
-  const dbItem = document.createElement('div');
-  dbItem.classList.add('tree-item', 'expanded');
+  // 後方互換: 単一スキーマオブジェクトが渡された場合は配列に変換
+  const schemaList = Array.isArray(schemas) ? schemas : [schemas];
+  if (schemaList.length === 0) return;
 
-  // Databaseは一つだけなので、この階層は省略
-  // const dbLabel = document.createElement('div');
-  // dbLabel.classList.add('tree-label');
-  // // デフォルトは折り畳み(⊞)、クリックで展開
-  // dbLabel.innerHTML = `<i class="toggle-icon">⊞</i><i class="icon">📂</i> Untitled.db`;
-  // // クリックでグループ表示のトグル
-  // dbLabel.style.cursor = 'pointer';
-  // dbLabel.addEventListener('click', () => {
-  //   const children = Array.from(dbItem.children).slice(1);
-  //   children.forEach(node => node.style.display = node.style.display === 'none' ? '' : 'none');
-  //   // トグルアイコンを更新
-  //   const isCollapsed = children[0].style.display === 'none';
-  //   dbLabel.querySelector('.toggle-icon').textContent = isCollapsed ? '⊞' : '⊟';
-  // });
-  // dbItem.appendChild(dbLabel);
+  schemaList.forEach(schema => {
+    const alias = schema.alias || 'main';
+    const isMain = alias === 'main';
+    const isExpanded = previousOpenState.get(alias) ?? false;
 
-  const tablesGroup = createTreeGroup('Tables', schema.tables || [], 'table'); // アイコン名変更
-  const viewsGroup = createTreeGroup('Views', schema.views || [], 'dataset'); // アイコン名変更
-  const indexesGroup = createTreeGroup('Indexes', schema.indexes || [], 'table_rows_narrow'); // アイコン名変更
-  const triggersGroup = createTreeGroup('Triggers', schema.triggers || [], 'bolt'); // アイコン名変更
+    // DB ノードコンテナ
+    const dbItem = document.createElement('div');
+    dbItem.classList.add('tree-item');
 
-  // テストで要素を可視にするため、全グループを初期展開
-  [tablesGroup, viewsGroup, indexesGroup, triggersGroup].forEach(group => {
-    const items = group.querySelector('.tree-items');
-    items.style.display = '';
-    group.querySelector('.toggle-icon').textContent = 'expand_more'; // アイコン変更
-  });
+    // DB ノードラベル（折り畳み可能）
+    const dbLabel = document.createElement('div');
+    dbLabel.classList.add('tree-label', 'db-node');
+    dbLabel.dataset.dbAlias = alias;
+    dbLabel.style.cursor = 'pointer';
+    dbLabel.style.display = 'flex';
+    dbLabel.style.alignItems = 'center';
+    dbLabel.style.justifyContent = 'space-between';
 
-  dbItem.appendChild(tablesGroup);
-  dbItem.appendChild(viewsGroup);
-  dbItem.appendChild(indexesGroup);
-  dbItem.appendChild(triggersGroup);
+    const dbLabelLeft = document.createElement('span');
+    dbLabelLeft.style.display = 'flex';
+    dbLabelLeft.style.alignItems = 'center';
+    dbLabelLeft.style.gap = '4px';
+    dbLabelLeft.innerHTML = `<span class="material-symbols-outlined toggle-icon">${isExpanded ? 'expand_more' : 'chevron_right'}</span><span class="material-symbols-outlined icon">database</span> ${alias}`;
+    dbLabel.appendChild(dbLabelLeft);
 
-  treeView.appendChild(dbItem);
-
-  // テーブルクリック時のSQLエディタ挿入処理（アクティブなquery-areaのエディタにセット）
-  treeView.addEventListener('click', (e) => {
-    const label = e.target.closest('.tree-label.table');
-    if (!label) return;
-    const tableName = label.dataset.name;
-    // アクティブなquery-area内のsql-editorを取得
-    const editor = getActiveSqlEditor();
-    if (editor) {
-      editor.value = `SELECT * FROM ${tableName} LIMIT 100`;
-      editor.focus();
+    // 全 DB に Detach ボタンを表示（main は空 DB へのリセット）
+    {
+      const detachBtn = document.createElement('button');
+      detachBtn.classList.add('menu-button');
+      detachBtn.dataset.detachAlias = alias;
+      detachBtn.title = isMain ? 'メインDBをリセット' : `'${alias}' をデタッチ`;
+      detachBtn.innerHTML = '<span class="material-symbols-outlined">link_off</span>';
+      detachBtn.style.fontSize = '14px';
+      dbLabel.appendChild(detachBtn);
     }
+
+    dbItem.appendChild(dbLabel);
+
+    const dbChildren = document.createElement('div');
+    dbChildren.classList.add('db-children', 'tree-items');
+    dbChildren.style.display = isExpanded ? '' : 'none';
+
+    const tablesGroup = createTreeGroup('Tables', schema.tables || [], 'table', alias);
+    const viewsGroup = createTreeGroup('Views', schema.views || [], 'dataset', alias);
+    const indexesGroup = createTreeGroup('Indexes', schema.indexes || [], 'table_rows_narrow', alias);
+    const triggersGroup = createTreeGroup('Triggers', schema.triggers || [], 'bolt', alias);
+
+    dbChildren.appendChild(tablesGroup);
+    dbChildren.appendChild(viewsGroup);
+    dbChildren.appendChild(indexesGroup);
+    dbChildren.appendChild(triggersGroup);
+    dbItem.appendChild(dbChildren);
+
+    // DB ノードの折り畳み（デタッチボタンのクリックは無視）
+    dbLabel.addEventListener('click', (e) => {
+      if (e.target.closest('[data-detach-alias]')) return;
+      const isOpen = dbChildren.style.display !== 'none';
+      dbChildren.style.display = isOpen ? 'none' : '';
+      dbLabelLeft.querySelector('.toggle-icon').textContent = isOpen ? 'chevron_right' : 'expand_more';
+    });
+
+    treeView.appendChild(dbItem);
   });
+
+  // テーブルクリック時のSQLエディタ挿入処理（委任・重複防止）
+  if (!treeView._tableClickBound) {
+    treeView._tableClickBound = true;
+    treeView.addEventListener('click', (e) => {
+      const label = e.target.closest('.tree-label.Tables');
+      if (!label) return;
+      const tableName = label.dataset.name;
+      const dbAlias = label.dataset.dbAlias;
+      setEditorQueryForTable(getActiveSqlEditor(), tableName, dbAlias || 'main');
+    });
+  }
+};
+
+const captureDatabaseOpenState = (treeView) => {
+  const states = new Map();
+  if (!treeView) return states;
+
+  treeView.querySelectorAll('.tree-label.db-node').forEach(label => {
+    const alias = label.dataset.dbAlias;
+    const children = label.parentElement?.querySelector(':scope > .db-children');
+    if (!alias || !children) return;
+    states.set(alias, children.style.display !== 'none');
+  });
+
+  return states;
 };
 
 // データセットツリーを更新する関数
-export const updateDatasetTree = () => {
+export const updateDatasetTree = (db) => {
   const datasetTreeView = document.getElementById('dataset-tree');
   if (!datasetTreeView) return;
   datasetTreeView.innerHTML = '';
-  const store = window.__DATASET_STORE__ || {};
-  const names = Object.keys(store);
+
+  const names = db ? listDatasetTables(db) : [];
   names.forEach(name => {
     const itemElem = document.createElement('div');
     itemElem.classList.add('tree-item');
     itemElem.innerHTML = `<div class="tree-label dataset" data-name="${name}"><span class="material-symbols-outlined icon">dataset</span> ${name}</div>`;
     datasetTreeView.appendChild(itemElem);
   });
-
-  // --- 参照データプルダウンも全タブ分更新 ---
-  const selects = document.querySelectorAll('.ref-dataset-select');
-  selects.forEach(select => {
-    const current = select.value;
-    // 一旦全option削除
-    while (select.firstChild) select.removeChild(select.firstChild);
-    // なし
-    const noneOpt = document.createElement('option');
-    noneOpt.value = '';
-    noneOpt.textContent = 'なし';
-    select.appendChild(noneOpt);
-    // データセット名
-    const dsStore = window.__DATASET_STORE__ || {};
-    Object.keys(dsStore).forEach(name => {
-      const opt = document.createElement('option');
-      opt.value = name;
-      opt.textContent = name;
-      select.appendChild(opt);
-    });
-    // 可能なら元の選択値を復元
-    select.value = current;
-    if (!select.value) select.value = '';
-  });
 };
 
-// Sidebarのデータセット名クリックでResultsタブ追加＆内容復元
+// Sidebarのデータセット名クリックでクエリエディタにSQLを挿入
 export function setupDatasetTreeClickHandler() {
   const datasetTreeView = document.getElementById('dataset-tree');
-  if (!datasetTreeView) return;
+  if (!datasetTreeView || datasetTreeView.dataset.clickBound === 'true') return;
+  datasetTreeView.dataset.clickBound = 'true';
   datasetTreeView.addEventListener('click', (e) => {
     const label = e.target.closest('.tree-label.dataset');
     if (!label) return;
-    const name = label.dataset.name;
-    const store = window.__DATASET_STORE__ || {};
-    const dataset = store[name];
-    if (!dataset) return;
-    // Resultsタブ・テーブル追加
-    const tabs = document.querySelector('.results-tabs');
-    const resultsGrid = document.getElementById('results-grid');
-    if (!tabs || !resultsGrid) return;
-    // 既に同名タブがあればアクティブ化のみ
-    let resTab = Array.from(tabs.querySelectorAll('.result-tab')).find(t => t.textContent.replace('×','').trim() === name);
-    if (!resTab) {
-      // addResultsを使ってタブ・テーブル追加（×ボタン付き）
-      addResults(name, `results-table-dataset-${name}`);
-      resTab = Array.from(tabs.querySelectorAll('.result-tab')).find(t => t.textContent.replace('×','').trim() === name);
-      // テーブル内容をセット
-      const table = document.getElementById(`results-table-dataset-${name}`);
-      if (table) {
-        table.innerHTML = '';
-        // thead
-        const thead = document.createElement('thead');
-        const tr = document.createElement('tr');
-        dataset.columns.forEach(col => {
-          const th = document.createElement('th');
-          th.textContent = col;
-          tr.appendChild(th);
-        });
-        thead.appendChild(tr);
-        table.appendChild(thead);
-        // tbody
-        const tbody = document.createElement('tbody');
-        dataset.rows.forEach(row => {
-          const tr = document.createElement('tr');
-          dataset.columns.forEach(col => {
-            const td = document.createElement('td');
-            td.textContent = row[col] != null ? row[col] : '';
-            tr.appendChild(td);
-          });
-          tbody.appendChild(tr);
-        });
-        table.appendChild(tbody);
-        table.style.display = 'none';
+    setEditorQueryForTable(getActiveSqlEditor(), label.dataset.name, DATASET_DB_ALIAS);
+  });
+}
+
+export function setupDatasetUploadHandler({ db, showSuccess, showError, onDatasetChanged }) {
+  const dsUploadBtn = document.getElementById('add-dataset-button');
+  if (!dsUploadBtn || dsUploadBtn.dataset.uploadBound === 'true') return;
+  dsUploadBtn.dataset.uploadBound = 'true';
+
+  dsUploadBtn.addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv,text/csv';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+
+    input.addEventListener('change', async () => {
+      try {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        const { importCsvFileAsDataset } = await import('../datasetDb.js');
+        const tableName = await importCsvFileAsDataset(db, file);
+        showSuccess && showSuccess(`データセット「${tableName}」を登録しました`);
+        onDatasetChanged && onDatasetChanged();
+      } catch (error) {
+        showError && showError(error.message || 'CSVの読み込みに失敗しました');
+      } finally {
+        document.body.removeChild(input);
       }
-    }
-    // タブ切り替え
-    tabs.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
-    resTab.classList.add('active');
-    // テーブル表示切替
-    Array.from(resultsGrid.children).forEach(tbl => {
-      tbl.style.display = (tbl.id === resTab.dataset.resultsId) ? '' : 'none';
-    });
-    // Resultsグリッド表示、Messages非表示
-    resultsGrid.style.display = '';
-    hideMessagesArea();
-    // メニューバー表示
-    const resultsMenuBar = document.querySelector('.results-menu-bar');
-    if (resultsMenuBar) resultsMenuBar.style.display = 'flex';
+    }, { once: true });
+
+    input.click();
   });
 }
 
 // ツリービューのグループを作成するヘルパー関数
-const createTreeGroup = (title, items, iconName) => { // 引数名を icon -> iconName に変更
+const createTreeGroup = (title, items, iconName, dbAlias = 'main') => {
   const groupContainer = document.createElement('div');
   groupContainer.classList.add('tree-group');
 
   const groupLabel = document.createElement('div');
   groupLabel.classList.add('tree-label',`${title}-root`);
   // デフォルトは折り畳み(chevron_right)、クリックで展開
-  groupLabel.innerHTML = `<span class="material-symbols-outlined toggle-icon">chevron_right</span><span class="material-symbols-outlined icon">${iconName}</span> ${title}`; // アイコン変更
+  groupLabel.innerHTML = `<span class="material-symbols-outlined toggle-icon">chevron_right</span><span class="material-symbols-outlined icon">${iconName}</span> ${title}`;
   groupContainer.appendChild(groupLabel);
 
   const itemsContainer = document.createElement('div');
@@ -315,7 +274,8 @@ const createTreeGroup = (title, items, iconName) => { // 引数名を icon -> ic
   items.forEach(item => {
     const itemElem = document.createElement('div');
     itemElem.classList.add('tree-item');
-    itemElem.innerHTML = `<div class=\"tree-label ${title}\" data-name=\"${item}\"><span class=\"material-symbols-outlined icon\">${iconName}</span> ${item}</div>`; // アイコン変更
+    // data-db-alias を埋め込んでクリック時の alias 特定に使う
+    itemElem.innerHTML = `<div class="tree-label ${title}" data-name="${item}" data-db-alias="${dbAlias}"><span class="material-symbols-outlined icon">${iconName}</span> ${item}</div>`;
     itemsContainer.appendChild(itemElem);
   });
 
@@ -325,7 +285,7 @@ const createTreeGroup = (title, items, iconName) => { // 引数名を icon -> ic
   groupLabel.addEventListener('click', () => {
     const isCollapsed = itemsContainer.style.display === 'none';
     itemsContainer.style.display = isCollapsed ? '' : 'none';
-    groupLabel.querySelector('.toggle-icon').textContent = isCollapsed ? 'expand_more' : 'chevron_right'; // アイコン変更
+    groupLabel.querySelector('.toggle-icon').textContent = isCollapsed ? 'expand_more' : 'chevron_right';
   });
   return groupContainer;
 };

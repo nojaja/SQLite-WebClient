@@ -3,12 +3,36 @@ import { UI_IDS } from './ui/constants.js'; // Updated import path
 import { updateResultsGrid } from './ui/Results.js';
 import { setMessages } from './ui/MessagesArea.js';
 import { getSqlEditor, setSqlEditorValue } from './ui/QueryArea.js';
+import { setupRegisterDatasetHandler } from './ui/ResultsArea.js';
+import { setupDatasetUploadHandler, updateDatasetTree } from './ui/Sidebar.js';
+import { DATASET_DB_ALIAS, ensureDatasetDatabase } from './datasetDb.js';
 // events.js - イベントハンドラーを設定するモジュール
 
 // イベントハンドラーのセットアップ
 export const setupEventHandlers = (ui, db, tabManager) => {
   // 現在のデータベースパス
   let currentDbPath = 'Untitled.db';
+  // mainノードを非表示にするフラグ
+  let mainHidden = false;
+  // 表示用スキーマを取得（mainHiddenフラグを考慮）
+  const getDisplaySchemas = () => {
+    const schemas = db.getAllDatabaseSchemas().filter(schema => schema.alias !== DATASET_DB_ALIAS);
+    return mainHidden ? schemas.filter(schema => schema.alias !== 'main') : schemas;
+  };
+  const refreshTrees = () => {
+    ui.updateDatabaseTree(getDisplaySchemas());
+    updateDatasetTree(db);
+  };
+
+  ensureDatasetDatabase(db);
+  updateDatasetTree(db);
+  setupRegisterDatasetHandler(ui, db, () => updateDatasetTree(db));
+  setupDatasetUploadHandler({
+    db,
+    showSuccess: ui.showSuccess,
+    showError: ui.showError,
+    onDatasetChanged: () => updateDatasetTree(db)
+  });
 
   // クエリ実行処理 (DBオブジェクトを使用して常に実行)
   const handleQueryExecution = async () => {
@@ -22,26 +46,6 @@ export const setupEventHandlers = (ui, db, tabManager) => {
         ui.showError(msg);
         setMessages(msg);
         return;
-      }
-      // 実行エンジンの選択値取得
-      const activeQueryArea = editor.closest('.query-area');
-      let refRows = null;
-      let refDatasetName = '';
-      let engine = 'SQL';
-      if (activeQueryArea) {
-        const refSelect = activeQueryArea.querySelector('.ref-dataset-select');
-        if (refSelect && refSelect.value) {
-          const dsStore = window.__DATASET_STORE__ || {};
-          const ds = dsStore[refSelect.value];
-          if (ds && Array.isArray(ds.rows)) {
-            refRows = ds.rows;
-            refDatasetName = refSelect.value;
-          }
-        }
-        const engineSelect = activeQueryArea.querySelector('.engine-select');
-        if (engineSelect && engineSelect.value) {
-          engine = engineSelect.value;
-        }
       }
 
       // 既存のResultsタブ・テーブルを全てクリア（Messages以外）
@@ -59,74 +63,7 @@ export const setupEventHandlers = (ui, db, tabManager) => {
       let hasResults = false;
       let anySuccess = false;
       let anyResult = false;
-      if (engine === 'jsonata') {
-        // jsonata実行
-        if (!refDatasetName || !refRows) {
-          const msg = 'jsonata実行には参照データセットの選択が必要です';
-          ui.showError(msg);
-          setMessages(msg);
-          return;
-        }
-        try {
-          const jsonata = (await import('jsonata')).default;
-          const expr = jsonata(query);
-          const jsonataResult = await expr.evaluate(refRows);
-          // 結果をテーブル形式に整形
-          let columns = [];
-          let rows = [];
-          if (Array.isArray(jsonataResult)) {
-            if (jsonataResult.length > 0 && typeof jsonataResult[0] === 'object' && !Array.isArray(jsonataResult[0])) {
-              columns = Object.keys(jsonataResult[0]);
-              rows = jsonataResult;
-            } else {
-              columns = ['value'];
-              rows = jsonataResult.map(v => ({ value: v }));
-            }
-          } else if (typeof jsonataResult === 'object' && jsonataResult !== null) {
-            columns = Object.keys(jsonataResult);
-            rows = [jsonataResult];
-          } else {
-            columns = ['value'];
-            rows = [{ value: jsonataResult }];
-          }
-          results = [{ success: true, results: rows, columns }];
-          messages.push('jsonata式を実行しました');
-        } catch (err) {
-          results = [{ success: false, error: err.message }];
-          messages.push('jsonata実行エラー: ' + err.message);
-        }
-      } else {
-        // ...既存のSQL実行処理...
-        if (refRows && refRows.length > 0) {
-          // データセットの各rowでprepare/bind/stepを繰り返し実行
-          const resultsArr = [];
-          const stmt = db.db.prepare(query);
-          for (const row of refRows) {
-            const dollarRow = Object.fromEntries(
-              Object.entries(row).map(([k, v]) => [k.startsWith('$') ? k : `$${k}`, v])
-            );
-            stmt.bind(dollarRow);
-          // SELECTかどうかで処理分岐
-            if (/^\s*select/i.test(query)) {
-              while (stmt.step()) {
-                resultsArr.push(stmt.getAsObject());
-              }
-            } else {
-              stmt.step(); // INSERT/UPDATE/DELETE等
-            }
-            stmt.reset();
-          }
-          stmt.finalize();
-          if (/^\s*select/i.test(query)) {
-            results = [{ success: true, results: resultsArr, columns: resultsArr.length > 0 ? Object.keys(resultsArr[0]) : [] }];
-          } else {
-            results = [{ success: true, info: {} }];
-          }
-        } else {
-          // 通常通り1回だけ実行
-          results = db.executeQuery(query);
-        }
-      }
+      results = db.executeQuery(query);
       // ...既存の結果表示処理...
       let idx = 0;
       for (const result of results) {
@@ -197,27 +134,56 @@ export const setupEventHandlers = (ui, db, tabManager) => {
   // 新規データベース作成ボタン
   const newDbButton = document.getElementById('new-db-button');
   if (newDbButton) {
-    newDbButton.addEventListener('click', () => {
-      const dbPath = handleNewDatabase(ui, db);
+    newDbButton.addEventListener('click', async () => {
+      const dbPath = await handleNewDatabase(ui, db);
       if (dbPath) currentDbPath = dbPath;
     });
   }
 
-  // "開く"ボタンでファイル選択によるDBインポート
+  // "開く"ボタンでファイル選択によるDBインポート（複数ファイル対応）
   const openDbButton = document.getElementById('open-db-button');
   if (openDbButton) {
     openDbButton.addEventListener('click', async () => {
       try {
-        const dbPath = await getFile();
-        if (!dbPath) return;
-        console.log('選択されたDBファイル:', dbPath.name);
-        const arrayBuffer = await readFileAsArrayBuffer(dbPath);
-        const data = new Uint8Array(arrayBuffer);
-        await db.import(data);
-        ui.showSuccess(`データベース '${dbPath.name}' を開きました`);
-        currentDbPath = dbPath.name;
-        const schema = db.getDatabaseSchema(currentDbPath);
-        ui.updateDatabaseTree(schema);
+        const files = await getFiles();
+        if (!files || files.length === 0) return;
+        const hasExistingDb = currentDbPath !== 'Untitled.db' || mainHidden;
+        if (hasExistingDb) {
+          // 既に DB を開いている場合は全ファイルをアタッチで追加
+          for (const file of files) {
+            const data = new Uint8Array(await readFileAsArrayBuffer(file));
+            const alias = toAttachAlias(file.name, db);
+            try {
+              db.attachDatabase(alias, data);
+              ui.showSuccess(`'${file.name}' をエイリアス '${alias}' でアタッチしました`);
+            } catch (attachErr) {
+              ui.showError(`'${file.name}' のアタッチ失敗: ${attachErr.message}`);
+            }
+          }
+        } else {
+          // 初回: 1ファイル目をメインDBとして読み込み
+          const firstFile = files[0];
+          console.log('選択されたDBファイル:', firstFile.name);
+          const firstData = new Uint8Array(await readFileAsArrayBuffer(firstFile));
+          await db.import(firstData);
+          ensureDatasetDatabase(db);
+          currentDbPath = firstFile.name;
+          mainHidden = false;
+          ui.showSuccess(`データベース '${firstFile.name}' を開きました`);
+          // 2ファイル目以降をATTACH
+          for (let i = 1; i < files.length; i++) {
+            const file = files[i];
+            const data = new Uint8Array(await readFileAsArrayBuffer(file));
+            const alias = toAttachAlias(file.name, db);
+            try {
+              db.attachDatabase(alias, data);
+              ui.showSuccess(`'${file.name}' をエイリアス '${alias}' でアタッチしました`);
+            } catch (attachErr) {
+              ui.showError(`'${file.name}' のアタッチ失敗: ${attachErr.message}`);
+            }
+          }
+        }
+        refreshTrees();
         const dbStatusElem = document.getElementById('db-status');
         if (dbStatusElem) dbStatusElem.textContent = currentDbPath;
       } catch (error) {
@@ -244,16 +210,30 @@ export const setupEventHandlers = (ui, db, tabManager) => {
     treeViewElem.addEventListener('dragover', e => e.preventDefault());
     treeViewElem.addEventListener('drop', async e => {
       e.preventDefault();
-      const dbPath = e.dataTransfer.files[0];
-      if (!dbPath) return;
+      const droppedFiles = Array.from(e.dataTransfer.files).filter(f => /\.db$/i.test(f.name));
+      if (droppedFiles.length === 0) return;
       try {
-        const arrayBuffer = await readFileAsArrayBuffer(dbPath);
-        const data = new Uint8Array(arrayBuffer);
-        await db.import(data);
-        ui.showSuccess(`データベース '${dbPath}' を開きました`);
-        currentDbPath = dbPath.name;
-        const schema = db.getDatabaseSchema(currentDbPath);
-        ui.updateDatabaseTree(schema);
+        // 1ファイル目をメインDBとして読み込み
+        const firstFile = droppedFiles[0];
+        const firstData = new Uint8Array(await readFileAsArrayBuffer(firstFile));
+        await db.import(firstData);
+        ensureDatasetDatabase(db);
+        currentDbPath = firstFile.name;
+        mainHidden = false;
+        ui.showSuccess(`データベース '${firstFile.name}' を開きました`);
+        // 2ファイル目以降をATTACH
+        for (let i = 1; i < droppedFiles.length; i++) {
+          const file = droppedFiles[i];
+          const data = new Uint8Array(await readFileAsArrayBuffer(file));
+          const alias = toAttachAlias(file.name, db);
+          try {
+            db.attachDatabase(alias, data);
+            ui.showSuccess(`'${file.name}' をエイリアス '${alias}' でアタッチしました`);
+          } catch (attachErr) {
+            ui.showError(`'${file.name}' のアタッチ失敗: ${attachErr.message}`);
+          }
+        }
+        refreshTrees();
         const dbStatusElem = document.getElementById('db-status');
         if (dbStatusElem) dbStatusElem.textContent = currentDbPath;
       } catch (error) {
@@ -267,18 +247,12 @@ export const setupEventHandlers = (ui, db, tabManager) => {
   if (runButton) {
     runButton.addEventListener('click', handleQueryExecution);
   }
-  // サイドバーのテーブル選択やランイベントは既存のまま
+  // サイドバーのデータベースノードクリック（テーブルクリックは Sidebar.js で処理）
   document.addEventListener('click', (event) => {
     const target = event.target.closest('.tree-label');
     if (target && target.textContent.includes('.db') && currentDbPath) {
       // データベースクリック時の処理
       handleDatabaseClick(ui, db, currentDbPath);
-    } else if (target && target.closest('.Tables')) {
-      // テーブルクリック時の処理 (currentDbPath が未設定でもデフォルトDBを使用)
-      const dbPath = currentDbPath || 'sample_database';
-      // currentDbPath を更新し、クエリ設定のみ行う
-      currentDbPath = dbPath;
-      handleTableClick(ui, db, dbPath, target.dataset.name);
     }
   });
 
@@ -286,10 +260,34 @@ export const setupEventHandlers = (ui, db, tabManager) => {
   const refreshButton = document.getElementById('refresh-db-button');
   if (refreshButton) {
     refreshButton.addEventListener('click', () => {
-      // currentDbPath に関わらずツリービューを更新
-      handleDatabaseClick(ui, db, currentDbPath);
+      refreshTrees();
+      const dbStatusElem = document.getElementById('db-status');
+      if (dbStatusElem) dbStatusElem.textContent = currentDbPath;
     });
   }
+
+  // Detachボタンのイベントハンドラ（委任）
+  document.addEventListener('click', async (event) => {
+    const detachBtn = event.target.closest('[data-detach-alias]');
+    if (!detachBtn) return;
+    const alias = detachBtn.dataset.detachAlias;
+    try {
+      if (alias === 'main') {
+        // mainを非表示にしてツリーから消す
+        mainHidden = true;
+        currentDbPath = 'Untitled.db';
+        const dbStatusElem = document.getElementById('db-status');
+        if (dbStatusElem) dbStatusElem.textContent = currentDbPath;
+        ui.showSuccess('メインデータベースを閉じました');
+      } else {
+        db.detachDatabase(alias);
+        ui.showSuccess(`'${alias}' をデタッチしました`);
+      }
+      refreshTrees();
+    } catch (e) {
+      ui.showError(`デタッチ失敗: ${e.message}`);
+    }
+  });
 
   // "Queryを開く"ボタン
   const openQueryButton = document.getElementById('open-query-button');
@@ -334,12 +332,13 @@ export const setupEventHandlers = (ui, db, tabManager) => {
 };
 
 // 新規データベースを作成する処理
-const handleNewDatabase = (ui, db) => {
+const handleNewDatabase = async (ui, db) => {
   try {
     // ブラウザ環境
     let dbPath = 'new_database.db';
     // 新しいデータベースを作成して接続
-    db.import(null);
+    await db.import(null);
+    ensureDatasetDatabase(db);
 
     // サンプルテーブルを作成（複数SQLをそれぞれ実行）
     db.executeQuery(`CREATE TABLE IF NOT EXISTS test (col1 INTEGER PRIMARY KEY, col2 TEXT)`);
@@ -349,8 +348,9 @@ const handleNewDatabase = (ui, db) => {
     ui.showSuccess(`新しいデータベース '${dbPath}' を作成しました`);
 
     // データベースツリービューを更新
-    const schema = db.getDatabaseSchema(dbPath);
-    ui.updateDatabaseTree(schema);
+    const schema = db.getAllDatabaseSchemas();
+    ui.updateDatabaseTree(schema.filter(item => item.alias !== DATASET_DB_ALIAS));
+    updateDatasetTree(db);
 
     const dbStatusElem = document.getElementById('db-status');
     if (dbStatusElem) {
@@ -368,11 +368,11 @@ const handleNewDatabase = (ui, db) => {
 // データベースクリック時の処理
 const handleDatabaseClick = (ui, db, dbPath) => {
   try {
-    // データベーススキーマ情報を取得
-    const schema = db.getDatabaseSchema(dbPath);
+    const schemas = db.getAllDatabaseSchemas();
     const dbStatusElem = document.getElementById('db-status');
     if (dbStatusElem) dbStatusElem.textContent = dbPath;
-    ui.updateDatabaseTree(schema);
+    ui.updateDatabaseTree(schemas.filter(item => item.alias !== DATASET_DB_ALIAS));
+    updateDatasetTree(db);
   } catch (error) {
     ui.showError(`データベース情報の取得に失敗しました: ${error.message}`);
   }
@@ -391,6 +391,17 @@ const handleTableClick = (ui, db, dbPath, tableName) => {
   }
 };
 
+const toAttachAlias = (fileName, db) => {
+  const baseAlias = fileName.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_').replace(/^([0-9])/, '_$1') || 'attached_db';
+  let alias = baseAlias;
+  let suffix = 1;
+  while (alias === DATASET_DB_ALIAS || db.hasAttachedDatabase(alias)) {
+    alias = `${baseAlias}_${suffix}`;
+    suffix += 1;
+  }
+  return alias;
+};
+
 // ヘルパー: ファイル保存 (DB用)
 function saveFile(filename, contents) {
   const blob = new Blob([contents], { type: 'application/sqlite.db' });
@@ -398,11 +409,22 @@ function saveFile(filename, contents) {
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
 }
-// ヘルパー: ファイル選択ダイアログ
+// ヘルパー: ファイル選択ダイアログ（単一ファイル）
 async function getFile() {
   return new Promise(resolve => {
     const input = document.createElement('input'); input.type = 'file'; input.accept = '.db';
     input.onchange = () => resolve(input.files[0]); input.click();
+  });
+}
+// ヘルパー: ファイル選択ダイアログ（複数ファイル対応）
+async function getFiles() {
+  return new Promise(resolve => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.db';
+    input.multiple = true;
+    input.onchange = () => resolve(Array.from(input.files));
+    input.click();
   });
 }
 // ヘルパー: ファイルをArrayBufferで読み取り

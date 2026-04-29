@@ -59,6 +59,27 @@ body {
   border-right: 1px solid #ddd;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.tree-block {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.databases-tree-block {
+  flex: 0 1 auto;
+  max-height: 50%;
+}
+
+.dataset-tree-block {
+  flex: 1 1 0;
+}
+
+.databases-tree-block .tree-view,
+.dataset-tree-block .tree-view {
+  min-height: 0;
 }
 
 .tree-title {
@@ -105,8 +126,25 @@ body {
   background-color: #e0e0e0;
 }
 
+/* ツリー内のボタンはダーク色を使用 */
+.tree-label .menu-button,
+.tree-view .menu-button {
+  color: #333;
+  padding: 2px 4px;
+}
+.tree-label .menu-button:hover,
+.tree-view .menu-button:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+  color: #000;
+}
+
 .tree-items {
   margin-left: 30px; /* インデントを 20px から 30px に変更 */
+}
+
+.db-children {
+  padding-left: 2px;
+  border-left: 1px solid #d6d6d6;
 }
 
 .main-area {

@@ -1,5 +1,6 @@
 import { UI_IDS } from './constants.js';
 import { updateDatasetTree } from './Sidebar.js';
+import { registerHtmlTableAsDataset } from '../datasetDb.js';
 
 // results-area（グリッド＋メニューバー）を生成する関数
 export function createResultsArea() {
@@ -56,9 +57,11 @@ export function hideResultsArea() {
 }
 
 // Resultsのデータセット登録ボタンの動作をセットアップ
-export function setupRegisterDatasetHandler(ui) {
+export function setupRegisterDatasetHandler(ui, db, onDatasetChanged) {
   const btn = document.getElementById('register-dataset-btn');
-  if (!btn) return;
+  if (!btn || btn.dataset.registerBound === 'true') return;
+  btn.dataset.registerBound = 'true';
+
   btn.addEventListener('click', () => {
     // アクティブなResultsタブのテーブルIDを取得
     const tabs = document.querySelector('.results-tabs');
@@ -67,31 +70,25 @@ export function setupRegisterDatasetHandler(ui) {
       ui && ui.showError && ui.showError('Resultsタブがアクティブな時のみ登録できます');
       return;
     }
+
     const tableId = activeTab.dataset.resultsId || 'results-table';
     const table = document.getElementById(tableId);
     if (!table) {
       ui && ui.showError && ui.showError('登録対象のテーブルが見つかりません');
       return;
     }
-    // テーブルからデータ抽出
-    const columns = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent);
-    const rows = Array.from(table.querySelectorAll('tbody tr')).map(tr => {
-      const cells = Array.from(tr.querySelectorAll('td'));
-      const obj = {};
-      columns.forEach((col, i) => { obj[col] = cells[i]?.textContent ?? null; });
-      return obj;
-    });
-    if (!columns.length || !rows.length) {
-      ui && ui.showError && ui.showError('登録できるデータがありません');
-      return;
-    }
+
     // データセット名を入力
     const name = prompt('データセット名を入力してください', 'dataset_' + new Date().getTime());
     if (!name) return;
-    // ストアに保存
-    window.__DATASET_STORE__[name] = { columns, rows };
-    ui && ui.showSuccess && ui.showSuccess(`データセット「${name}」を登録しました`);
-    // サイドバーのデータセットツリーを更新
-    updateDatasetTree();
+
+    try {
+      const registeredName = registerHtmlTableAsDataset(db, name, table);
+      ui && ui.showSuccess && ui.showSuccess(`データセット「${registeredName}」を登録しました`);
+      updateDatasetTree(db);
+      onDatasetChanged && onDatasetChanged();
+    } catch (error) {
+      ui && ui.showError && ui.showError(error.message || 'データセット登録に失敗しました');
+    }
   });
 }

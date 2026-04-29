@@ -3,7 +3,6 @@ import { UI_IDS } from './constants.js';
 import * as PanelAreaView from './PanelAreaView.js';
 import * as ResultsArea from './ResultsArea.js';
 import * as MessagesArea from './MessagesArea.js';
-import { showError, showSuccess } from './StatusBar.js';
 
 // panel-area（results-tabs, results-area, messages-areaをまとめてラップ）を生成する関数
 export function createPanelArea() {
@@ -85,8 +84,6 @@ export function createPanelArea() {
         }
 
     }
-
-    setTimeout(() => ResultsArea.setupRegisterDatasetHandler({ showSuccess, showError }), 0);
 
     // results-area部分をResultsArea.jsから生成
     const { resultsArea, resultsGrid, resultsMenuBar } = ResultsArea.createResultsArea();

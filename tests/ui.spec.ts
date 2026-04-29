@@ -1,4 +1,20 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+async function expandDatabaseNode(page: Page, alias = 'main') {
+  const dbLabel = page.locator(`.tree-label.db-node[data-db-alias="${alias}"]`);
+  const dbChildren = dbLabel.locator('xpath=..').locator('> .db-children');
+  if (await dbChildren.isHidden()) {
+    await dbLabel.click();
+  }
+}
+
+async function expandTreeGroup(page: Page, title: string) {
+  const groupLabel = page.locator(`.${title}-root`).first();
+  const groupItems = groupLabel.locator('xpath=following-sibling::*[1]');
+  if (await groupItems.isHidden()) {
+    await groupLabel.click();
+  }
+}
 
 test.describe('画面構成確認', () => {
   test.beforeEach(async ({ page }) => {
@@ -109,8 +125,11 @@ test.describe('画面構成確認', () => {
   });
 
   test('テーブルクリックでSQL設定と実行結果がResultsに表示される', async ({ page }) => {
+    await page.click('#new-db-button');
+    await expandDatabaseNode(page);
+    await expandTreeGroup(page, 'Tables');
     // 'test' テーブルをクリック
-    await page.locator('.tree-label', { hasText: 'test' }).click();
+    await page.locator('.tree-label.Tables[data-name="test"]').click();
     // SQLエディタにクエリが設定される
     await expect(page.locator('#sql-editor')).toHaveValue('SELECT * FROM test LIMIT 100');
     // 実行ボタンをクリック
@@ -121,10 +140,13 @@ test.describe('画面構成確認', () => {
   });
 
   test('新規queryで開いた2番目のタブでもテーブルクリックで実行結果がResultsに表示される', async ({ page }) => {
+    await page.click('#new-db-button');
     // 新規Queryで2番目のタブに切替
     await page.click('#new-query-button');
+    await expandDatabaseNode(page);
+    await expandTreeGroup(page, 'Tables');
     // テーブル 'test' をクリック
-    await page.locator('.tree-label', { hasText: 'test' }).click();
+    await page.locator('.tree-label.Tables[data-name="test"]').click();
     // SQLエディタにクエリが設定される
     await expect(page.locator('#sql-editor')).toHaveValue('SELECT * FROM test LIMIT 100');
     // 実行ボタンをクリック
@@ -135,6 +157,7 @@ test.describe('画面構成確認', () => {
   });
 
   test('Views, Indexes, Triggersがツリービューに表示される', async ({ page }) => {
+    await page.click('#new-db-button');
     const editor = page.locator('#sql-editor');
     // Viewを作成
     await editor.fill("CREATE VIEW v_test AS SELECT * FROM test;");
@@ -156,119 +179,70 @@ test.describe('画面構成確認', () => {
     await editor.fill("COMMIT;");
     await page.click('#run-button');
     await page.click('#refresh-db-button');
+    await expandDatabaseNode(page);
     // Viewsグループを展開してViewを検証
     const viewsLabel = page.locator('.Views-root');
-    //await viewsLabel.click();
+    await expandTreeGroup(page, 'Views');
     await expect(viewsLabel).toBeVisible();
     await expect(page.locator('.Views[data-name="v_test"]').first()).toBeVisible();
     // Indexesグループを展開してIndexを検証
     const indexesLabel = page.locator('.Indexes-root');
-    //await indexesLabel.click();
+    await expandTreeGroup(page, 'Indexes');
     await expect(indexesLabel).toBeVisible();
     await expect(page.locator('.Indexes[data-name="idx_col2"]')).toBeVisible();
     // Triggersグループを展開してTriggerを検証
     const triggersLabel = page.locator('.Triggers-root');
-    //await triggersLabel.click();
+    await expandTreeGroup(page, 'Triggers');
     await expect(triggersLabel).toBeVisible();
     await expect(page.locator('.Triggers[data-name="trg_test"]')).toBeVisible();
   });
 
-  test('初期テーブル作成（testテーブルが存在すること）', async ({ page }) => {
+  test('新規DB作成後にtestテーブルが存在すること', async ({ page }) => {
     await page.goto('/');
-    // テーブル一覧に'test'が表示されるまで待つ
-    await expect(page.locator('.tree-label', { hasText: 'test' })).toBeVisible();
-    // SQLエディタでSELECTしてデータが返ること
+    await page.click('#new-db-button');
     await page.fill('#sql-editor', 'SELECT * FROM test;');
     await page.click('#run-button');
-    // 初期データ2件が入っていること
     const rows = await page.locator('#results-table tbody tr').count();
     expect(rows).toBeGreaterThanOrEqual(2);
   });
 
-  test('SELECT結果をデータセットに登録し__DATASET_STORE__に反映される', async ({ page }) => {
+  test('SELECT結果をデータセットDBに登録できる', async ({ page }) => {
     await page.goto('/');
-    // testテーブルのデータをSELECT
+    await page.click('#new-db-button');
     await page.fill('#sql-editor', 'SELECT * FROM test LIMIT 100;');
     await page.click('#run-button');
-    // 「データセットに登録」ボタンをクリック
-    await page.click('#register-dataset-btn');
-    // ダイアログでデータセット名を入力
     await page.evaluate(() => {
-      // promptをモックして自動入力
       window.prompt = () => 'test_dataset';
     });
-    // もう一度ボタンを押して登録
     await page.click('#register-dataset-btn');
-    // __DATASET_STORE__にtest_datasetが登録されていることを確認
-    const exists = await page.evaluate(() => {
-      return !!window.__DATASET_STORE__ && !!window.__DATASET_STORE__['test_dataset'] && Array.isArray(window.__DATASET_STORE__['test_dataset'].rows);
-    });
-    expect(exists).toBe(true);
-    // データ件数も確認
-    const rowCount = await page.evaluate(() => window.__DATASET_STORE__['test_dataset'].rows.length);
-    expect(rowCount).toBeGreaterThanOrEqual(2);
+
+    await expect(page.locator('#dataset-tree')).toContainText('test_dataset');
+
+    await page.fill('#sql-editor', 'SELECT COUNT(*) AS cnt FROM dataset.test_dataset;');
+    await page.click('#run-button');
+    await expect(page.locator('#results-grid')).toContainText('2');
   });
 
-  test('参照データを使って複数行INSERTできる', async ({ page }) => {
+  test('query-menu-bar に参照データと実行エンジンが表示されない', async ({ page }) => {
     await page.goto('/');
-    // testテーブルのデータをSELECTしてデータセット登録
+    await expect(page.locator('.query-menu-bar')).toHaveCount(0);
+    await expect(page.locator('#ref-dataset-select-query1')).toHaveCount(0);
+    await expect(page.locator('#engine-select-query1')).toHaveCount(0);
+  });
+
+  test('データセットは通常 SQL で参照できる', async ({ page }) => {
+    await page.goto('/');
+    await page.click('#new-db-button');
     await page.fill('#sql-editor', 'SELECT * FROM test LIMIT 100;');
     await page.click('#run-button');
-    // 「データセットに登録」ボタンをクリック
-    await page.click('#register-dataset-btn');
     await page.evaluate(() => { window.prompt = () => 'test_dataset'; });
     await page.click('#register-dataset-btn');
 
-    // 新規タブを開く
-    await page.click('#new-query-button');
-    // test2テーブル作成
-    await page.fill('#sql-editor', 'CREATE TABLE IF NOT EXISTS test2 (col1 INTEGER PRIMARY KEY, col2 TEXT);');
+    await page.fill('#sql-editor', 'SELECT col1, col2 FROM dataset.test_dataset ORDER BY col1;');
     await page.click('#run-button');
 
-    // 参照データプルダウンでtest_datasetを選択
-    const selectId = '#ref-dataset-select-query1';
-    await page.selectOption(selectId, 'test_dataset');
-
-    // test_datasetの内容をtest2にINSERT
-    await page.fill('#sql-editor', 'INSERT INTO test2 (col1, col2) VALUES ($col1, $col2);');
-    await page.click('#run-button');
-
-    // test2の内容を確認
-    await page.selectOption(selectId, 'なし');
-    await page.fill('#sql-editor', 'SELECT * FROM test2;');
-    await page.click('#run-button');
-    // test_datasetの件数とtest2の件数が一致すること
-    const dsCount = await page.evaluate(() => window.__DATASET_STORE__['test_dataset'].rows.length);
-    const t2Count = await page.locator('#results-table tbody tr').count();
-    expect(t2Count).toBe(dsCount);
-  });
-
-  test('参照データ×jsonataエンジンでjsonata式が実行できる', async ({ page }) => {
-    await page.goto('/');
-    // testテーブルのデータをSELECTしてデータセット登録
-    await page.fill('#sql-editor', 'SELECT * FROM test LIMIT 100;');
-    await page.click('#run-button');
-    await page.click('.result-tab', { timeout: 15000 });
-    await page.click('#register-dataset-btn');
-    await page.evaluate(() => { window.prompt = () => 'test_dataset'; });
-    await page.click('#register-dataset-btn');
-
-    // 参照データプルダウンでtest_datasetを選択
-    const selectId = '#ref-dataset-select-query1';
-    await page.selectOption(selectId, 'test_dataset');
-    // 実行エンジンプルダウンでjsonataを選択
-    const engineSelectId = '#engine-select-query1';
-    await page.selectOption(engineSelectId, 'jsonata');
-    // jsonata式を入力（col1の値を10倍した配列を返す）
-    await page.fill('#sql-editor', '$map($, function($v) { $number($v.col1) * 10 })');
-    await page.click('#run-button');
-
-    await page.click('.result-tab', { timeout: 15000 });
-    
-    // 結果が期待通り（例: 10, 20 など）が表示される
-    const values = await page.$$eval('#results-table tbody tr td', tds => tds.map(td => td.textContent));
-    expect(values).toContain('10');
-    expect(values).toContain('20');
+    await expect(page.locator('#results-grid')).toContainText('111');
+    await expect(page.locator('#results-grid')).toContainText('222');
   });
 
   test('全てのクエリタブを閉じてから新規タブを開いても正常に動作する', async ({ page }) => {

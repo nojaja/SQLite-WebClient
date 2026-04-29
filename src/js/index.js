@@ -44,18 +44,10 @@ const main = async () => {
   const db = await SQLiteManager.initialize(null, { print: console.log, printErr: console.error });
   // ブラウザ環境ではイベントハンドラと初期DB表示をセットアップ
   setupEventHandlers(ui, db, tabManager);
-  db.executeQuery(`CREATE TABLE IF NOT EXISTS test (col1 INTEGER PRIMARY KEY, col2 TEXT)`);
-  db.executeQuery(`INSERT OR IGNORE INTO test (col1, col2) VALUES (1, '111')`);
-  db.executeQuery(`INSERT OR IGNORE INTO test (col1, col2) VALUES (2, '222')`);
-  // スキーマ取得とツリービュー更新
-  const schema = db.getDatabaseSchema();
-  ui.updateDatabaseTree(schema);
+  // 起動直後はツリーを空のまま（サンプルデータを表示しない）
 
   console.log('SQLite Sampleの起動が完了しました！');
 };
-
-// データセットストア（グローバル）
-window.__DATASET_STORE__ = window.__DATASET_STORE__ || {};
 
 // アプリケーションを実行
 (async () => {
