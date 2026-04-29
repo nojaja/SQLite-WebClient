@@ -1,6 +1,7 @@
 
 /**
  * messages-area（メッセージ表示エリア）を生成する関数
+ * @returns 生成したメッセージエリア要素
  */
 export function createMessagesArea() {
   const messagesArea = document.createElement('div');
@@ -26,6 +27,7 @@ export function setMessages(msg) {
 
 /**
  * messages-area要素を取得
+ * @returns メッセージエリア要素または null
  */
 export function getMessagesArea() {
   return document.getElementById('messages-area');

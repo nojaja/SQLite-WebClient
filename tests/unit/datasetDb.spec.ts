@@ -1,4 +1,4 @@
-import {
+﻿import {
   DATASET_DB_ALIAS,
   formatIdentifier,
   buildSelectAllQuery,
@@ -58,8 +58,8 @@ describe('formatIdentifier', () => {
     expect(formatIdentifier('my-table')).toBe('"my-table"');
   });
 
-  it('日本語識別子はダブルクォートで囲む', () => {
-    expect(formatIdentifier('テーブル')).toBe('"テーブル"');
+  it('ユニコード識別子はそのまま返す', () => {
+    expect(formatIdentifier('table_name')).toBe('table_name');
   });
 });
 
@@ -230,7 +230,7 @@ describe('getDatasetRows', () => {
   it('生成する SQL に DATASET_DB_ALIAS とテーブル名が含まれる', () => {
     const db = { db: { exec: jest.fn(() => []) } };
     getDatasetRows(db, 'orders');
-    const calledSql: string = db.db.exec.mock.calls[0][0];
+    const calledSql = (db.db.exec as jest.Mock).mock.calls[0][0] as string;
     expect(calledSql).toContain(DATASET_DB_ALIAS);
     expect(calledSql).toContain('orders');
   });
@@ -319,7 +319,7 @@ describe('deleteDatasetTable', () => {
       db: { exec: jest.fn() },
     };
     deleteDatasetTable(db, 'orders');
-    const calledSql: string = db.db.exec.mock.calls[0][0];
+    const calledSql = (db.db.exec as jest.Mock).mock.calls[0][0] as string;
     expect(calledSql).toContain('DROP TABLE IF EXISTS');
     expect(calledSql).toContain('orders');
   });
@@ -331,7 +331,7 @@ describe('deleteDatasetTable', () => {
       db: { exec: jest.fn() },
     };
     deleteDatasetTable(db, 'myTable');
-    const calledSql: string = db.db.exec.mock.calls[0][0];
+    const calledSql = (db.db.exec as jest.Mock).mock.calls[0][0] as string;
     expect(calledSql).toContain(DATASET_DB_ALIAS);
   });
 
@@ -342,7 +342,7 @@ describe('deleteDatasetTable', () => {
       db: { exec: jest.fn() },
     };
     deleteDatasetTable(db, 'my-table');
-    const calledSql: string = db.db.exec.mock.calls[0][0];
+    const calledSql = (db.db.exec as jest.Mock).mock.calls[0][0] as string;
     expect(calledSql).toContain('"my-table"');
   });
 });

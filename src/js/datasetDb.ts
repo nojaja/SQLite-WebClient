@@ -6,12 +6,14 @@ const STRICT_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\
 /**
  *
  * @param value
+ * @returns エスケープ済み文字列
  */
 const escapeIdentifier = (value) => String(value).replace(/"/g, '""');
 
 /**
  *
  * @param value
+ * @returns フォーマット済み識別子
  */
 export const formatIdentifier = (value) => (
   SIMPLE_IDENTIFIER_PATTERN.test(value) ? value : `"${escapeIdentifier(value)}"`
@@ -22,6 +24,7 @@ export const formatIdentifier = (value) => (
  * @param schemaName
  * @param tableName
  * @param limit
+ * @returns SELECT クエリ文字列
  */
 export const buildSelectAllQuery = (schemaName, tableName, limit = 100) => {
   const qualifiedName = (!schemaName || schemaName === 'main')
@@ -35,6 +38,7 @@ export const buildSelectAllQuery = (schemaName, tableName, limit = 100) => {
  * @param editor
  * @param tableName
  * @param schemaName
+ * @returns void
  */
 export const setEditorQueryForTable = (editor, tableName, schemaName = 'main') => {
   if (!editor) return;
@@ -45,6 +49,7 @@ export const setEditorQueryForTable = (editor, tableName, schemaName = 'main') =
 /**
  *
  * @param bytes
+ * @returns Base64 エンコード文字列
  */
 const uint8ArrayToBase64 = (bytes) => {
   let binary = '';
@@ -58,6 +63,7 @@ const uint8ArrayToBase64 = (bytes) => {
 /**
  *
  * @param base64
+ * @returns バイナリデータ
  */
 const base64ToUint8Array = (base64) => {
   const binary = atob(base64);
@@ -70,6 +76,7 @@ const base64ToUint8Array = (base64) => {
 
 /**
  *
+ * @returns 保存済みデータまたは null
  */
 const loadPersistedDataset = () => {
   if (typeof window === 'undefined' || !window.localStorage) return null;
@@ -80,6 +87,7 @@ const loadPersistedDataset = () => {
 /**
  *
  * @param db
+ * @returns void
  */
 export const persistDatasetDatabase = (db) => {
   if (typeof window === 'undefined' || !window.localStorage) return;
@@ -90,6 +98,7 @@ export const persistDatasetDatabase = (db) => {
 /**
  *
  * @param db
+ * @returns アタッチした場合 true
  */
 export const ensureDatasetDatabase = (db) => {
   if (db.hasAttachedDatabase(DATASET_DB_ALIAS)) return false;
@@ -100,6 +109,7 @@ export const ensureDatasetDatabase = (db) => {
 /**
  *
  * @param db
+ * @returns テーブル名の配列
  */
 export const listDatasetTables = (db) => db.getDatabaseSchema(DATASET_DB_ALIAS).tables || [];
 
@@ -107,6 +117,7 @@ export const listDatasetTables = (db) => db.getDatabaseSchema(DATASET_DB_ALIAS).
  *
  * @param db
  * @param tableName
+ * @returns 行データの配列
  */
 export const getDatasetRows = (db, tableName) => {
   const sql = `SELECT * FROM ${formatIdentifier(DATASET_DB_ALIAS)}.${formatIdentifier(tableName)}`;
@@ -118,6 +129,7 @@ export const getDatasetRows = (db, tableName) => {
 /**
  *
  * @param value
+ * @returns 正規化されたテーブル名文字列
  */
 const normalizeTableNameSeed = (value) => {
   const trimmed = String(value || '').trim();
@@ -128,6 +140,7 @@ const normalizeTableNameSeed = (value) => {
  *
  * @param db
  * @param requestedName
+ * @returns 確定したテーブル名
  */
 export const resolveDatasetTableName = (db, requestedName) => {
   const baseName = normalizeTableNameSeed(requestedName);
@@ -145,6 +158,7 @@ export const resolveDatasetTableName = (db, requestedName) => {
 /**
  *
  * @param value
+ * @returns 推定された列型名
  */
 const inferColumnType = (value) => {
   if (value === null || value === undefined || value === '') return 'TEXT';
@@ -159,6 +173,7 @@ const inferColumnType = (value) => {
  *
  * @param columns
  * @param sampleRow
+ * @returns 列定義の配列
  */
 const buildColumnDefinitions = (columns, sampleRow = {}) => columns.map((column) => ({
   name: column,
@@ -170,6 +185,7 @@ const buildColumnDefinitions = (columns, sampleRow = {}) => columns.map((column)
  * @param db
  * @param tableName
  * @param columnDefinitions
+ * @returns void
  */
 const createDatasetTable = (db, tableName, columnDefinitions) => {
   const sql = `CREATE TABLE ${formatIdentifier(DATASET_DB_ALIAS)}.${formatIdentifier(tableName)} (${columnDefinitions.map(({ name, type }) => `${formatIdentifier(name)} ${type}`).join(', ')})`;
@@ -182,6 +198,7 @@ const createDatasetTable = (db, tableName, columnDefinitions) => {
  * @param tableName
  * @param columns
  * @param rows
+ * @returns void
  */
 const insertRowsIntoDataset = (db, tableName, columns, rows) => {
   if (!rows.length) return;
@@ -198,7 +215,7 @@ const insertRowsIntoDataset = (db, tableName, columns, rows) => {
   } catch (error) {
     try {
       db.db.exec('ROLLBACK');
-    } catch (_) {
+    } catch {
       // ignore rollback errors
     }
     throw error;
@@ -213,6 +230,7 @@ const insertRowsIntoDataset = (db, tableName, columns, rows) => {
  * @param requestedName
  * @param columns
  * @param rows
+ * @returns 登録されたテーブル名
  */
 export const registerRowsAsDatasetTable = (db, requestedName, columns, rows) => {
   if (!columns.length || !rows.length) {
@@ -231,12 +249,13 @@ export const registerRowsAsDatasetTable = (db, requestedName, columns, rows) => 
  * @param db
  * @param requestedName
  * @param tableElement
+ * @returns 登録されたテーブル名
  */
-export const registerHtmlTableAsDataset = (db, requestedName, tableElement) => {
-  const columns = Array.from(tableElement.querySelectorAll('thead th')).map((th) => th.textContent);
+export const registerHtmlTableAsDataset = (db, requestedName, tableElement: HTMLElement) => {
+  const columns = Array.from(tableElement.querySelectorAll('thead th')).map((th) => (th as HTMLElement).textContent ?? '');
   const rows = Array.from(tableElement.querySelectorAll('tbody tr')).map((tr) => {
-    const cells = Array.from(tr.querySelectorAll('td'));
-    return Object.fromEntries(columns.map((column, index) => [column, cells[index]?.textContent ?? null]));
+    const cells = Array.from((tr as HTMLTableRowElement).querySelectorAll('td'));
+    return Object.fromEntries(columns.map((column, index) => [column, (cells[index] as HTMLElement | undefined)?.textContent ?? null]));
   });
   return registerRowsAsDatasetTable(db, requestedName, columns, rows);
 };
@@ -245,6 +264,7 @@ export const registerHtmlTableAsDataset = (db, requestedName, tableElement) => {
  *
  * @param db
  * @param tableName
+ * @returns void
  */
 export const deleteDatasetTable = (db, tableName) => {
   ensureDatasetDatabase(db);
@@ -256,6 +276,7 @@ export const deleteDatasetTable = (db, tableName) => {
 /**
  *
  * @param fileName
+ * @returns 拡張子なしファイル名
  */
 const getFileBaseName = (fileName) => String(fileName).replace(/\.[^.]+$/, '');
 
@@ -263,13 +284,14 @@ const getFileBaseName = (fileName) => String(fileName).replace(/\.[^.]+$/, '');
  *
  * @param db
  * @param file
+ * @returns 登録されたテーブル名の Promise
  */
-export const importCsvFileAsDataset = async (db, file) => {
+export const importCsvFileAsDataset = async (db, file: File) => {
   ensureDatasetDatabase(db);
   const text = await file.text();
   const { parse } = await import('csv-parse/browser/esm');
-  const rows = await new Promise((resolve, reject) => {
-    parse(text, { columns: true, skip_empty_lines: true }, (error, output) => {
+  const rows = await new Promise<Record<string, string>[]>((resolve, reject) => {
+    parse(text, { columns: true, skip_empty_lines: true }, (error: Error | undefined, output: Record<string, string>[]) => {
       if (error) {
         reject(error);
         return;

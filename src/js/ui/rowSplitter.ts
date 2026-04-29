@@ -3,18 +3,7 @@
 let currentQueryEditor = null;
 
 /**
- * 水平スプリッター要素を作成し、必要なイベントを設定して返す関数
- * @returns スプリッター要素
- */
-export const createRowSplitter = () => {
-  const rowSplitter = document.createElement('div');
-  rowSplitter.classList.add('row-splitter');
-  attachRowSplitterEvents(rowSplitter, null);
-  return rowSplitter;
-};
-
-/**
- * 既存の水平スプリッター要素にイベントを設定する（Vue移行後に使用）
+ * 既存の水平スプリッター要素にイベントを設定する
  * @param rowSplitter
  * @param initialQueryEditor
  */
@@ -81,7 +70,7 @@ export const attachRowSplitterEvents = (rowSplitter: HTMLElement, initialQueryEd
    * アクティブなquery-editorをセット
    * @param editorElem
    */
-  (rowSplitter as any).setQueryEditor = (editorElem) => {
+  (rowSplitter as HTMLElement & { setQueryEditor?: (elem: HTMLElement | null) => void }).setQueryEditor = (editorElem) => {
     currentQueryEditor = editorElem;
   };
 };

@@ -1,18 +1,7 @@
-// splitter.js - スプリッター要素を作成するモジュール
+﻿// splitter.js - 既存スプリッター要素にイベントを設定するモジュール
 
 /**
- *
- * @param sidebarElement
- */
-export const createSplitter = (sidebarElement) => {
-  const splitter = document.createElement('div');
-  splitter.classList.add('splitter');
-  attachSplitterEvents(splitter, sidebarElement);
-  return splitter;
-};
-
-/**
- * 既存のスプリッター要素にイベントを設定する（Vue移行後に使用）
+ * 既存のスプリッター要素にイベントを設定する
  * @param splitter
  * @param sidebarElement
  */

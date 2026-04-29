@@ -4,6 +4,7 @@ import { registerHtmlTableAsDataset } from '../datasetDb';
 
 /**
  *
+ * @returns 生成した結果エリア要素群
  */
 export function createResultsArea() {
   const resultsGrid = document.createElement('div');
@@ -37,6 +38,7 @@ export function createResultsArea() {
 
 /**
  *
+ * @returns 結果エリア要素または null
  */
 export function getResultsArea() {
   return document.getElementById(UI_IDS.RESULTS_AREA);
@@ -44,41 +46,46 @@ export function getResultsArea() {
 
 /**
  *
+ * @returns void
  */
 export function showResultsArea() {
-  const area = getResultsArea();
+  const area = getResultsArea() as HTMLElement | null;
   if (area) area.style.display = '';
 }
 
 /**
  *
+ * @returns void
  */
 export function hideResultsArea() {
-  const area = getResultsArea();
+  const area = getResultsArea() as HTMLElement | null;
   if (area) area.style.display = 'none';
 }
 
 /**
  *
- * @param ui
- * @param db
- * @param onDatasetChanged
+ * @param ui UIコントローラー
+ * @param ui.showError エラー表示関数
+ * @param ui.showSuccess 成功表示関数
+ * @param db SQLiteManager インスタンス
+ * @param onDatasetChanged データセット変更時コールバック
+ * @returns void
  */
-export function setupRegisterDatasetHandler(ui, db, onDatasetChanged) {
-  const btn = document.getElementById('register-dataset-btn');
+export function setupRegisterDatasetHandler(ui: { showError?: (msg: string) => void; showSuccess?: (msg: string) => void }, db: unknown, onDatasetChanged?: () => void) {
+  const btn = document.getElementById('register-dataset-btn') as HTMLButtonElement | null;
   if (!btn || btn.dataset.registerBound === 'true') return;
   btn.dataset.registerBound = 'true';
 
   btn.addEventListener('click', () => {
     const tabs = document.querySelector('.results-tabs');
-    const activeTab = tabs && tabs.querySelector('.result-tab.active');
+    const activeTab = tabs?.querySelector('.result-tab.active') as HTMLElement | null;
     if (!activeTab) {
       ui?.showError?.('No active results tab found');
       return;
     }
 
     const tableId = activeTab.dataset.resultsId || 'results-table';
-    const table = document.getElementById(tableId);
+    const table = document.getElementById(tableId) as HTMLElement | null;
     if (!table) {
       ui?.showError?.('Results table not found');
       return;
@@ -92,8 +99,8 @@ export function setupRegisterDatasetHandler(ui, db, onDatasetChanged) {
       ui?.showSuccess?.(`Dataset '${registeredName}' registered`);
       updateDatasetTree(db);
       onDatasetChanged?.();
-    } catch (error) {
-      ui?.showError?.(error.message || 'Failed to register dataset');
+    } catch (error: unknown) {
+      ui?.showError?.((error instanceof Error ? error.message : String(error)) || 'Failed to register dataset');
     }
   });
 }

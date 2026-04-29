@@ -29,6 +29,10 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 
+defineOptions({
+  name: 'AppSidebar',
+});
+
 const dbTreeOpen = ref(true);
 const datasetTreeOpen = ref(true);
 

@@ -2,6 +2,7 @@ import { UI_IDS } from './constants';
 
 /**
  * query-area（クエリエディタ部分）を作成する関数
+ * @returns 生成したクエリエリア要素群
  */
 export const createQueryArea = () => {
   const queryArea = document.createElement('div');
@@ -24,21 +25,24 @@ export const createQueryArea = () => {
 
 /**
  * sql-editor要素を取得
+ * @returns SQLエディタ要素または null
  */
-export function getSqlEditor() {
-  return document.getElementById('sql-editor');
+export function getSqlEditor(): HTMLTextAreaElement | null {
+  return document.getElementById('sql-editor') as HTMLTextAreaElement | null;
 }
 
 /**
  * アクティブなquery-area内のsql-editorを取得
+ * @returns アクティブなSQLエディタ要素または null
  */
-export function getActiveSqlEditor() {
+export function getActiveSqlEditor(): HTMLTextAreaElement | null {
   const activeQueryArea = document.querySelector('.query-area.active');
-  return activeQueryArea && activeQueryArea.querySelector('textarea#sql-editor');
+  return activeQueryArea?.querySelector('textarea#sql-editor') as HTMLTextAreaElement | null;
 }
 
 /**
  * sql-editorの値を取得
+ * @returns エディタのテキスト値
  */
 export function getSqlEditorValue() {
   const editor = getSqlEditor();
@@ -47,9 +51,10 @@ export function getSqlEditorValue() {
 
 /**
  * sql-editorの値を設定
- * @param value
+ * @param value 設定するテキスト値
+ * @returns void
  */
-export function setSqlEditorValue(value) {
+export function setSqlEditorValue(value: string) {
   const editor = getSqlEditor();
   if (editor) editor.value = value;
 }

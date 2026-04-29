@@ -12,7 +12,8 @@ export function setupPanelArea() {
 
     /**
      * タブ切り替え時のアクション
-     * @param tab
+     * @param tab アクティブにするタブ要素
+     * @returns void
      */
     const activeAction = (tab: HTMLElement) => {
         const resultsMenuBar = document.querySelector('.results-menu-bar') as HTMLElement;
@@ -38,7 +39,8 @@ export function setupPanelArea() {
      * @param label
      * @param id
      * @param addaction
-     * @param removeaction
+     * @param removeaction タブ削除時コールバック
+     * @returns 追加したタブ要素
      */
     const addTab = (
         label: string,
@@ -76,7 +78,6 @@ export function setupPanelArea() {
         }
         return newTab;
     };
-
     // タブクリックハンドラ
     resultsTabs.addEventListener('click', (e: MouseEvent) => {
         const tab = (e.target as Element).closest('.result-tab') as HTMLElement;
@@ -92,9 +93,10 @@ export function setupPanelArea() {
     /**
      * window.addResults をセットアップ（クエリ実行結果タブの動的追加）
      * @param label
-     * @param tableId
+     * @param tableId テーブルID
+     * @returns void
      */
-    (window as any).addResults = (label: string, tableId: string = null) => {
+    (window as Window & { addResults?: (label: string, tableId: string) => void }).addResults = (label: string, tableId: string = null) => {
         const tabs = document.querySelector('.results-tabs') as HTMLElement;
         const resultsGrid = document.getElementById(UI_IDS.RESULTS_GRID);
         if (!tabs || !resultsGrid) return null;
@@ -109,9 +111,9 @@ export function setupPanelArea() {
                 if (resultsMenuBar) resultsMenuBar.style.display = 'flex';
                 resultsTabs.insertBefore(newTab, msgTab);
             },
-            (label, id) => {
+            () => {
                 const remainTabs = Array.from(tabs.querySelectorAll('.result-tab'))
-                    .filter(t => { console.log(t); return t !== resTab && t.textContent !== 'Messages'; }) as HTMLElement[];
+                    .filter(t => t !== resTab && t.textContent !== 'Messages') as HTMLElement[];
                 if (remainTabs.length > 0) {
                     remainTabs[0].classList.add('active');
                     MessagesArea.hideMessagesArea();
@@ -142,12 +144,4 @@ export function setupPanelArea() {
             resultsTable.style.display = '';
         }
     };
-}
-
-/**
- * 後方互換のためcreatingPanelAreaも残す（Vue移行前のコードから呼ばれる場合）
- */
-export function createPanelArea() {
-    setupPanelArea();
-    return document.querySelector('.panel-area') as HTMLElement;
 }

@@ -6,7 +6,25 @@ import { getSqlEditor, setSqlEditorValue } from './ui/QueryArea';
 import { setupRegisterDatasetHandler } from './ui/ResultsArea';
 import { setupDatasetUploadHandler, updateDatasetTree } from './ui/Sidebar';
 import { DATASET_DB_ALIAS, deleteDatasetTable, ensureDatasetDatabase } from './datasetDb';
+import SQLiteManager from './SQLiteManager';
 // events.js - イベントハンドラーを設定するモジュール
+
+/** クエリ実行結果の型 */
+interface QueryResult {
+  success: boolean;
+  results?: Record<string, unknown>[];
+  columns?: string[];
+  error?: string;
+  info?: { changes?: number };
+}
+
+/** UI コントローラーの型 */
+interface UiController {
+  showError: (msg: string) => void;
+  showSuccess: (msg: string) => void;
+  updateDatabaseTree: (schemas: { alias: string }[]) => void;
+}
+
 
 /**
  * 処理名: 結果UIクリア
@@ -14,6 +32,7 @@ import { DATASET_DB_ALIAS, deleteDatasetTable, ensureDatasetDatabase } from './d
  * 実装理由: クエリ実行前に前回の結果を消去するため
  * @param tabs - resultsタブコンテナ
  * @param resultsGrid - resultsグリッドコンテナ
+ * @returns void
  */
 const clearResultsUI = (tabs: Element, resultsGrid: HTMLElement) => {
   for (const tab of Array.from(tabs.querySelectorAll('.result-tab'))) {
@@ -33,17 +52,18 @@ const clearResultsUI = (tabs: Element, resultsGrid: HTMLElement) => {
  * @param resultCount - 全結果件数
  * @param ui - UIオブジェクト
  * @param messages - メッセージ配列（ミューテーション）
+ * @returns 結果フラグオブジェクト
  */
-const processResultItem = (result: any, idx: number, resultCount: number, ui: any, messages: string[]) => {
+const processResultItem = (result: QueryResult, idx: number, resultCount: number, ui: UiController, messages: string[]) => {
   if (result.success && result.results?.length > 0) {
     const tableId = idx === 0 ? 'results-table' : `results-table-${idx + 1}`;
     const tabLabel = resultCount === 1 ? 'Results' : `Results${idx + 1}`;
     try {
-      (window as any).addResults(tabLabel, tableId);
+      (window as Window & { addResults?: (label: string, id: string) => void }).addResults?.(tabLabel, tableId);
     } catch (error) {
       console.error('Resultsタブの追加エラー:', error);
     }
-    updateResultsGrid(result, tableId);
+    updateResultsGrid(result as unknown as { columns: string[]; results: Record<string, unknown>[] }, tableId);
     messages.push(`クエリ${idx + 1}: ${result.results.length} 行の結果`);
     return { hasResult: true, hasSuccess: true };
   }
@@ -105,7 +125,7 @@ const activateFirstResultTab = (tabs: Element, resultsGrid: HTMLElement) => {
  * @param startIndex - 開始インデックス（デフォルト0）
  * @param toAlias - alias生成関数
  */
-const attachFilesToDb = async (db: any, files: File[], ui: any, startIndex: number, toAlias: (name: string, db: any) => string) => {
+const attachFilesToDb = async (db: SQLiteManager, files: File[], ui: UiController, startIndex: number, toAlias: (name: string, db: SQLiteManager) => string) => {
   for (let i = startIndex; i < files.length; i++) {
     const file = files[i];
     const data = new Uint8Array(await readFileAsArrayBuffer(file));
@@ -113,8 +133,8 @@ const attachFilesToDb = async (db: any, files: File[], ui: any, startIndex: numb
     try {
       db.attachDatabase(alias, data);
       ui.showSuccess(`'${file.name}' をエイリアス '${alias}' でアタッチしました`);
-    } catch (attachErr: any) {
-      ui.showError(`'${file.name}' のアタッチ失敗: ${attachErr.message}`);
+    } catch (attachErr: unknown) {
+      ui.showError(`'${file.name}' のアタッチ失敗: ${attachErr instanceof Error ? attachErr.message : String(attachErr)}`);
     }
   }
 };
@@ -126,10 +146,11 @@ const attachFilesToDb = async (db: any, files: File[], ui: any, startIndex: numb
  * @param dbOrPromise
  * @param tabManager
  */
-export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
+export const setupEventHandlers = (ui: UiController, dbOrPromise: SQLiteManager | Promise<SQLiteManager>, tabManager: unknown) => {
+  void tabManager;
   // DB参照（Promise または解決済み値を受け取り、遅延初期化をサポート）
-  let db: any = null;
-  const dbReady: Promise<any> = Promise.resolve(dbOrPromise).then(resolved => {
+  let db: SQLiteManager | null = null;
+  const dbReady: Promise<SQLiteManager> = Promise.resolve(dbOrPromise).then(resolved => {
     db = resolved;
     return resolved;
   });
@@ -140,6 +161,7 @@ export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
   let mainHidden = false;
   /**
    * 表示用スキーマを取得（mainHiddenフラグを考慮）
+   * @returns 表示対象スキーマの配列
    */
   const getDisplaySchemas = () => {
     if (!db) return [];
@@ -147,7 +169,8 @@ export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
     return mainHidden ? schemas.filter(schema => schema.alias !== 'main') : schemas;
   };
   /**
-   *
+   * データベースツリーとデータセットツリーを更新する。
+   * @returns void
    */
   const refreshTrees = () => {
     ui.updateDatabaseTree(getDisplaySchemas());
@@ -164,7 +187,8 @@ export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
       showSuccess: ui.showSuccess,
       showError: ui.showError,
       /**
-       *
+       * データセットツリーを再描画する。
+       * @returns void
        */
       onDatasetChanged: () => updateDatasetTree(resolvedDb)
     });
@@ -172,6 +196,7 @@ export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
 
   /**
    * クエリ実行処理 (DBオブジェクトを使用して常に実行)
+   * @returns void Promise
    */
   const handleQueryExecution = async () => {
     try {
@@ -190,11 +215,11 @@ export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
       const tabs = document.querySelector('.results-tabs');
       const resultsGrid = document.getElementById(UI_IDS.RESULTS_GRID);
       clearResultsUI(tabs, resultsGrid);
-      const results: any[] = db.executeQuery(query);
+      const results: QueryResult[] = db.executeQuery(query) as unknown as QueryResult[];
       const messages: string[] = [];
       let anyResult = false;
       let anySuccess = false;
-      results.forEach((result: any, idx: number) => {
+      results.forEach((result: QueryResult, idx: number) => {
         const { hasResult, hasSuccess } = processResultItem(result, idx, results.length, ui, messages);
         if (hasResult) anyResult = true;
         if (hasSuccess) anySuccess = true;
@@ -313,7 +338,7 @@ export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
   }
   // サイドバーのデータベースノードクリック（テーブルクリックは Sidebar.js で処理）
   document.addEventListener('click', (event) => {
-    const target = event.target.closest('.tree-label');
+    const target = (event.target as HTMLElement | null)?.closest('.tree-label') as HTMLElement | null;
     if (target && target.textContent.includes('.db') && currentDbPath) {
       // データベースクリック時の処理
       handleDatabaseClick(ui, db, currentDbPath);
@@ -332,7 +357,7 @@ export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
 
   // Detachボタンのイベントハンドラ（委任）
   document.addEventListener('click', async (event) => {
-    const detachBtn = event.target.closest('[data-detach-alias]');
+    const detachBtn = (event.target as HTMLElement | null)?.closest('[data-detach-alias]') as HTMLElement | null;
     if (!detachBtn) return;
     const alias = detachBtn.dataset.detachAlias;
     try {
@@ -355,7 +380,7 @@ export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
 
   // Dataset削除ボタンのイベントハンドラ（委任）
   document.addEventListener('click', (event) => {
-    const deleteBtn = event.target.closest('[data-delete-dataset-table]');
+    const deleteBtn = (event.target as HTMLElement | null)?.closest('[data-delete-dataset-table]') as HTMLElement | null;
     if (!deleteBtn) return;
     const tableName = deleteBtn.dataset.deleteDatasetTable;
     if (!tableName) return;
@@ -414,8 +439,9 @@ export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
  * 新規データベースを作成する処理
  * @param ui
  * @param db
+ * @returns DBパス文字列または null の Promise
  */
-const handleNewDatabase = async (ui, db) => {
+const handleNewDatabase = async (ui: UiController, db: SQLiteManager) => {
   try {
     // ブラウザ環境
     let dbPath = 'new_database.db';
@@ -454,7 +480,7 @@ const handleNewDatabase = async (ui, db) => {
  * @param db
  * @param dbPath
  */
-const handleDatabaseClick = (ui, db, dbPath) => {
+const handleDatabaseClick = (ui: UiController, db: SQLiteManager, dbPath: string) => {
   try {
     const schemas = db.getAllDatabaseSchemas();
     const dbStatusElem = document.getElementById('db-status');
@@ -473,10 +499,12 @@ const handleDatabaseClick = (ui, db, dbPath) => {
  * @param dbPath
  * @param tableName
  */
-const handleTableClick = (ui, db, dbPath, tableName) => {
+const handleTableClick = (ui: UiController, db: SQLiteManager, dbPath: string, tableName: string) => {
+  void db;
+  void dbPath;
   try {
     // テーブルのSELECT文をエディタに設定
-    const editor = document.getElementById('sql-editor');
+    const editor = document.getElementById('sql-editor') as HTMLTextAreaElement | null;
     if (editor) {
       editor.value = `SELECT * FROM ${tableName} LIMIT 100`;
     }
@@ -484,13 +512,15 @@ const handleTableClick = (ui, db, dbPath, tableName) => {
     ui.showError(`テーブル情報の取得に失敗しました: ${error.message}`);
   }
 };
+void handleTableClick;
 
 /**
  *
  * @param fileName
  * @param db
+ * @returns 生成されたエイリアス文字列
  */
-const toAttachAlias = (fileName, db) => {
+const toAttachAlias = (fileName: string, db: SQLiteManager) => {
   const baseAlias = fileName.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_').replace(/^([0-9])/, '_$1') || 'attached_db';
   let alias = baseAlias;
   let suffix = 1;
@@ -504,7 +534,8 @@ const toAttachAlias = (fileName, db) => {
 /**
  * ヘルパー: ファイル保存 (DB用)
  * @param filename
- * @param contents
+ * @param contents 保存するデータ
+ * @returns void
  */
 function saveFile(filename, contents) {
   const blob = new Blob([contents], { type: 'application/sqlite.db' });
@@ -516,79 +547,139 @@ function saveFile(filename, contents) {
 /**
  * ヘルパー: ファイル選択ダイアログ（単一ファイル）
  */
-async function getFile() {
-  return new Promise(resolve => {
-    const input = document.createElement('input'); input.type = 'file'; input.accept = '.db';
+async function getFile(): Promise<File | null> {
+  void getFile;
+  /**
+   * ファイル選択ダイアログを開いて結果を resolve する。
+   * @param resolve Promise の resolve 関数
+   */
+  function openFileDialog(resolve: (file: File | null) => void) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.db';
     /**
-     *
+     * 単一ファイル選択時に Promise を解決する。
      */
-    input.onchange = () => resolve(input.files[0]); input.click();
-  });
+    function handleFileChange() {
+      resolve(input.files?.[0] ?? null);
+    }
+    input.onchange = handleFileChange;
+    input.click();
+  }
+
+  return new Promise(openFileDialog);
 }
+void getFile;
 
 /**
  * ヘルパー: ファイル選択ダイアログ（複数ファイル対応）
  */
-async function getFiles() {
-  return new Promise(resolve => {
+async function getFiles(): Promise<File[]> {
+  /**
+   * 複数ファイル選択ダイアログを開いて結果を resolve する。
+   * @param resolve Promise の resolve 関数
+   */
+  function openFilesDialog(resolve: (files: File[]) => void) {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.db';
     input.multiple = true;
     /**
-     *
+     * 複数ファイル選択時に Promise を解決する。
      */
-    input.onchange = () => resolve(Array.from(input.files));
+    function handleFilesChange() {
+      resolve(Array.from(input.files ?? []));
+    }
+    input.onchange = handleFilesChange;
     input.click();
-  });
+  }
+
+  return new Promise(openFilesDialog);
 }
 
 /**
  * ヘルパー: ファイルをArrayBufferで読み取り
  * @param file
  */
-async function readFileAsArrayBuffer(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader(); /**
-     *
+async function readFileAsArrayBuffer(file: Blob): Promise<ArrayBuffer> {
+  /**
+   * FileReader でバイナリを読み込む。
+   * @param resolve Promise の resolve 関数
+   * @param reject Promise の reject 関数
+   */
+  function loadArrayBuffer(resolve: (buffer: ArrayBuffer) => void, reject: (reason?: unknown) => void) {
+    const reader = new FileReader();
+    /**
+     * バイナリ読み込み成功時に Promise を解決する。
      */
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject; reader.readAsArrayBuffer(file);
-  });
+    function handleArrayBufferLoad() {
+      resolve(reader.result as ArrayBuffer);
+    }
+    reader.onload = handleArrayBufferLoad;
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  }
+
+  return new Promise(loadArrayBuffer);
 }
 
 /**
  * ヘルパー: ファイル選択ダイアログ (SQL用)
  */
-async function getSqlFile() {
-  return new Promise(resolve => {
-    const input = document.createElement('input'); input.type = 'file'; input.accept = '.sql';
+async function getSqlFile(): Promise<File | null> {
+  /**
+   * SQL ファイル選択ダイアログを開いて結果を resolve する。
+   * @param resolve Promise の resolve 関数
+   */
+  function openSqlFileDialog(resolve: (file: File | null) => void) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.sql';
     /**
-     *
+     * SQL ファイル選択時に Promise を解決する。
      */
-    input.onchange = () => resolve(input.files[0]); input.click();
-  });
+    function handleSqlFileChange() {
+      resolve(input.files?.[0] ?? null);
+    }
+    input.onchange = handleSqlFileChange;
+    input.click();
+  }
+
+  return new Promise(openSqlFileDialog);
 }
 
 /**
  * ヘルパー: ファイルをテキストで読み取り
  * @param file
  */
-async function readFileAsText(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader(); /**
-     *
+async function readFileAsText(file: Blob): Promise<string> {
+  /**
+   * FileReader でテキストを読み込む。
+   * @param resolve Promise の resolve 関数
+   * @param reject Promise の reject 関数
+   */
+  function loadText(resolve: (text: string) => void, reject: (reason?: unknown) => void) {
+    const reader = new FileReader();
+    /**
+     * テキスト読み込み成功時に Promise を解決する。
      */
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject; reader.readAsText(file);
-  });
+    function handleTextLoad() {
+      resolve((reader.result as string) ?? '');
+    }
+    reader.onload = handleTextLoad;
+    reader.onerror = reject;
+    reader.readAsText(file);
+  }
+
+  return new Promise(loadText);
 }
 
 /**
  * ヘルパー: テキストファイル保存
  * @param filename
  * @param contents
- * @param mimeType
+ * @param mimeType MIMEタイプ
+ * @returns void
  */
 function saveTextFile(filename, contents, mimeType = 'text/plain') {
   const blob = new Blob([contents], { type: mimeType });

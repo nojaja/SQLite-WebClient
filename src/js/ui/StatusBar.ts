@@ -2,6 +2,7 @@ import { UI_IDS } from './constants';
 
 /**
  * ステータスバーを作成する関数
+ * @returns 生成したステータスバー要素
  */
 export const createStatusBar = () => {
   const statusBar = document.createElement('div');
@@ -20,6 +21,7 @@ export const createStatusBar = () => {
 /**
  * エラーメッセージを表示する関数
  * @param message
+ * @returns void
  */
 export const showError = (message) => {
   const statusBar = document.getElementById(UI_IDS.STATUS_BAR);
@@ -36,6 +38,7 @@ export const showError = (message) => {
 /**
  * 成功メッセージを表示する関数
  * @param message
+ * @returns void
  */
 export const showSuccess = (message) => {
   const statusBar = document.getElementById(UI_IDS.STATUS_BAR);
