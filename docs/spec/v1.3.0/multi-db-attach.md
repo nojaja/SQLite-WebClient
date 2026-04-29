@@ -110,3 +110,22 @@ updateDatabaseTree(schemas: Array<{alias, tables, views, indexes, triggers}>): v
 - 既存の単一 DB 動作は `main` スキーマとして継続動作。
 - `updateDatabaseTree` は単一スキーマオブジェクトではなく配列を受け取るよう変更（破壊的変更）。
   - 全呼び出し箇所を本 PR で同時修正する。
+
+---
+
+## 設計判断
+
+### ATTACH DATABASE を SQLiteManager 内部に閉じ込める理由
+`ATTACH`/`DETACH` の SQL 文字列組み立てはすべて `SQLiteManager` に集約し、UI 層からは抽象メソッドのみを呼ぶ。
+SQL インジェクション防止チェック（alias 正規表現）を一箇所に集中させ、漏れをなくすためである。
+
+### alias の自動生成ルール（ファイル名ベース）
+ユーザーがファイルを開くたびに任意の alias を入力する UX は煩雑なため、ファイル名から自動生成する。
+生成後に `^[a-zA-Z_][a-zA-Z0-9_]*$` で検証し、非準拠の場合はエラーとして弾く。
+
+### `getDatabaseSchema` の引数省略時デフォルトを `'main'` にする理由
+既存コードが引数なしで呼び出している箇所が複数存在するため、後方互換性を維持するデフォルト値とした。
+将来的にすべての呼び出し元を修正した段階でデフォルトを削除する想定である。
+
+### `temp` スキーマを getAllDatabaseSchemas から除外する理由
+SQLite の `temp` DB はセッション限りの内部作業領域であり、ユーザーが操作する対象ではないため、ツリー表示対象から除外する。

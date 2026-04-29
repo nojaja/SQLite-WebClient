@@ -8,7 +8,124 @@ import { setupDatasetUploadHandler, updateDatasetTree } from './ui/Sidebar';
 import { DATASET_DB_ALIAS, deleteDatasetTable, ensureDatasetDatabase } from './datasetDb';
 // events.js - イベントハンドラーを設定するモジュール
 
-// イベントハンドラーのセットアップ
+/**
+ * 処理名: 結果UIクリア
+ * 処理概要: 既存のResultsタブとテーブル要素を削除する
+ * 実装理由: クエリ実行前に前回の結果を消去するため
+ * @param tabs - resultsタブコンテナ
+ * @param resultsGrid - resultsグリッドコンテナ
+ */
+const clearResultsUI = (tabs: Element, resultsGrid: HTMLElement) => {
+  for (const tab of Array.from(tabs.querySelectorAll('.result-tab'))) {
+    if (tab.textContent !== 'Messages') tab.remove();
+  }
+  for (const tbl of Array.from(resultsGrid.children)) {
+    if ((tbl as HTMLElement).id.startsWith('results-table')) tbl.remove();
+  }
+};
+
+/**
+ * 処理名: 単一クエリ結果処理
+ * 処理概要: クエリ結果1件を処理してメッセージ配列を更新する
+ * 実装理由: handleQueryExecution の複雑度を下げるため責務を分離
+ * @param result - クエリ実行結果オブジェクト
+ * @param idx - 結果インデックス（0始まり）
+ * @param resultCount - 全結果件数
+ * @param ui - UIオブジェクト
+ * @param messages - メッセージ配列（ミューテーション）
+ */
+const processResultItem = (result: any, idx: number, resultCount: number, ui: any, messages: string[]) => {
+  if (result.success && result.results?.length > 0) {
+    const tableId = idx === 0 ? 'results-table' : `results-table-${idx + 1}`;
+    const tabLabel = resultCount === 1 ? 'Results' : `Results${idx + 1}`;
+    try {
+      (window as any).addResults(tabLabel, tableId);
+    } catch (error) {
+      console.error('Resultsタブの追加エラー:', error);
+    }
+    updateResultsGrid(result, tableId);
+    messages.push(`クエリ${idx + 1}: ${result.results.length} 行の結果`);
+    return { hasResult: true, hasSuccess: true };
+  }
+  if (result.success && !result.results?.length) {
+    const msg = `クエリ${idx + 1}を実行しました: ${result.info?.changes || 0} 行に影響`;
+    ui.showSuccess(msg);
+    messages.push(msg);
+    return { hasResult: false, hasSuccess: true };
+  }
+  const err = `クエリ${idx + 1}エラー: ${result.error}`;
+  ui.showError(err);
+  messages.push(err);
+  return { hasResult: false, hasSuccess: false };
+};
+
+/**
+ * 処理名: Messagesタブアクティブ化
+ * 処理概要: Messagesタブをアクティブにする
+ * 実装理由: クエリ結果なし時の表示制御を単一責務の関数に分離
+ * @param tabs - resultsタブコンテナ
+ */
+const activateMessagesTab = (tabs: Element | null) => {
+  if (!tabs) return;
+  const msgTab = tabs.querySelector('.result-tab:last-child');
+  if (!msgTab) return;
+  tabs.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
+  msgTab.classList.add('active');
+};
+
+/**
+ * 処理名: 最初のResultsタブアクティブ化
+ * 処理概要: 最初のResultsタブをアクティブにしてResultsエリアを表示する
+ * 実装理由: クエリ結果あり時の表示制御を単一責務の関数に分離
+ * @param tabs - resultsタブコンテナ
+ * @param resultsGrid - resultsグリッドコンテナ
+ */
+const activateFirstResultTab = (tabs: Element, resultsGrid: HTMLElement) => {
+  const firstResultTab = Array.from(tabs.querySelectorAll('.result-tab'))
+    .find(tab => tab.textContent.trim().startsWith('Results')) as HTMLElement;
+  if (!firstResultTab) return;
+  tabs.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
+  firstResultTab.classList.add('active');
+  Array.from(resultsGrid.children).forEach((tbl: Element) => {
+    (tbl as HTMLElement).style.display = (tbl as HTMLElement).id === firstResultTab.dataset.resultsId ? '' : 'none';
+  });
+  const resultsArea = document.getElementById('results-area');
+  const messagesArea = document.getElementById('messages-area');
+  if (resultsArea) resultsArea.style.display = '';
+  if (messagesArea) messagesArea.style.display = 'none';
+};
+
+/**
+ * 処理名: ファイル群アタッチ
+ * 処理概要: 複数ファイルをDBにアタッチする
+ * 実装理由: openDbButton/dropハンドラの重複コードを排除するため
+ * @param db - SQLiteManager インスタンス
+ * @param files - アタッチ対象ファイル配列
+ * @param ui - UIオブジェクト
+ * @param startIndex - 開始インデックス（デフォルト0）
+ * @param toAlias - alias生成関数
+ */
+const attachFilesToDb = async (db: any, files: File[], ui: any, startIndex: number, toAlias: (name: string, db: any) => string) => {
+  for (let i = startIndex; i < files.length; i++) {
+    const file = files[i];
+    const data = new Uint8Array(await readFileAsArrayBuffer(file));
+    const alias = toAlias(file.name, db);
+    try {
+      db.attachDatabase(alias, data);
+      ui.showSuccess(`'${file.name}' をエイリアス '${alias}' でアタッチしました`);
+    } catch (attachErr: any) {
+      ui.showError(`'${file.name}' のアタッチ失敗: ${attachErr.message}`);
+    }
+  }
+};
+
+
+/**
+ * イベントハンドラーのセットアップ
+ * @param ui
+ * @param dbOrPromise
+ * @param tabManager
+ */
 export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
   // DB参照（Promise または解決済み値を受け取り、遅延初期化をサポート）
   let db: any = null;
@@ -21,12 +138,17 @@ export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
   let currentDbPath = 'Untitled.db';
   // mainノードを非表示にするフラグ
   let mainHidden = false;
-  // 表示用スキーマを取得（mainHiddenフラグを考慮）
+  /**
+   * 表示用スキーマを取得（mainHiddenフラグを考慮）
+   */
   const getDisplaySchemas = () => {
     if (!db) return [];
     const schemas = db.getAllDatabaseSchemas().filter(schema => schema.alias !== DATASET_DB_ALIAS);
     return mainHidden ? schemas.filter(schema => schema.alias !== 'main') : schemas;
   };
+  /**
+   *
+   */
   const refreshTrees = () => {
     ui.updateDatabaseTree(getDisplaySchemas());
     if (db) updateDatasetTree(db);
@@ -41,11 +163,16 @@ export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
       db: resolvedDb,
       showSuccess: ui.showSuccess,
       showError: ui.showError,
+      /**
+       *
+       */
       onDatasetChanged: () => updateDatasetTree(resolvedDb)
     });
   });
 
-  // クエリ実行処理 (DBオブジェクトを使用して常に実行)
+  /**
+   * クエリ実行処理 (DBオブジェクトを使用して常に実行)
+   */
   const handleQueryExecution = async () => {
     try {
       const editor = getSqlEditor();
@@ -62,77 +189,21 @@ export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
       // 既存のResultsタブ・テーブルを全てクリア（Messages以外）
       const tabs = document.querySelector('.results-tabs');
       const resultsGrid = document.getElementById(UI_IDS.RESULTS_GRID);
-      // 先に全て削除
-      for (const tab of Array.from(tabs.querySelectorAll('.result-tab'))) {
-        if (tab.textContent !== 'Messages') tab.remove();
-      }
-      for (const tbl of Array.from(resultsGrid.children)) {
-        if (tbl.id.startsWith('results-table')) tbl.remove();
-      }
-      let results = [];
-      let messages = [];
-      let hasResults = false;
-      let anySuccess = false;
+      clearResultsUI(tabs, resultsGrid);
+      const results: any[] = db.executeQuery(query);
+      const messages: string[] = [];
       let anyResult = false;
-      results = db.executeQuery(query);
-      // ...既存の結果表示処理...
-      let idx = 0;
-      for (const result of results) {
-        // 結果がある場合のみResultsタブを生成
-        if (result.success && result.results && result.results.length > 0) {
-          const tableId = idx === 0 ? 'results-table' : `results-table-${idx+1}`;
-          const tabLabel = results.length === 1 ? 'Results' : `Results${idx+1}`;
-          try {
-            addResults(tabLabel, tableId);
-            
-          } catch (error) {
-            console.error('Resultsタブの追加エラー:', error);
-          }
-          updateResultsGrid(result, tableId);
-          anySuccess = true;
-          anyResult = true;
-          messages.push(`クエリ${idx+1}: ${result.results.length} 行の結果`);
-        }
-        if (result.success && (!result.results || result.results.length === 0)) {
-          const msg = `クエリ${idx+1}を実行しました: ${result.info?.changes || 0} 行に影響`;
-          ui.showSuccess(msg);
-          messages.push(msg);
-        } else if (!result.success) {
-          const err = `クエリ${idx+1}エラー: ${result.error}`;
-          ui.showError(err);
-          messages.push(err);
-        }
-        idx++;
-      }
-      // Messagesタブにログ・エラーを表示
+      let anySuccess = false;
+      results.forEach((result: any, idx: number) => {
+        const { hasResult, hasSuccess } = processResultItem(result, idx, results.length, ui, messages);
+        if (hasResult) anyResult = true;
+        if (hasSuccess) anySuccess = true;
+      });
       setMessages(messages);
-      // 結果が無い場合はMessagesタブのみアクティブ・Resultsタブは生成しない
       if (!anyResult) {
-        const tabs = document.querySelector('.results-tabs');
-        const msgTab = tabs && tabs.querySelector('.result-tab:last-child');
-        if (msgTab) {
-          tabs.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
-          msgTab.classList.add('active');
-        }
+        activateMessagesTab(tabs);
       } else if (anySuccess) {
-        // 最初のResultタブをアクティブに
-        const tabs = document.querySelector('.results-tabs');
-        const resultsGrid = document.getElementById(UI_IDS.RESULTS_GRID);
-        // 先頭のResults系タブをアクティブに
-        const firstResultTab = Array.from(tabs.querySelectorAll('.result-tab'))
-          .find(tab => tab.textContent.trim().startsWith('Results'));
-        if (firstResultTab) {
-          tabs.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
-          firstResultTab.classList.add('active');
-          Array.from(resultsGrid.children).forEach(tbl => {
-            tbl.style.display = (tbl.id === firstResultTab.dataset.resultsId) ? '' : 'none';
-          });
-          // Resultsエリア表示
-          const resultsArea = document.getElementById('results-area');
-          const messagesArea = document.getElementById('messages-area');
-          if (resultsArea) resultsArea.style.display = '';
-          if (messagesArea) messagesArea.style.display = 'none';
-        }
+        activateFirstResultTab(tabs, resultsGrid);
       }
     } catch (error) {
       const msg = `クエリ実行中にエラーが発生しました: ${error.message}`;
@@ -164,19 +235,8 @@ export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
         await dbReady;
         const hasExistingDb = currentDbPath !== 'Untitled.db' || mainHidden;
         if (hasExistingDb) {
-          // 既に DB を開いている場合は全ファイルをアタッチで追加
-          for (const file of files) {
-            const data = new Uint8Array(await readFileAsArrayBuffer(file));
-            const alias = toAttachAlias(file.name, db);
-            try {
-              db.attachDatabase(alias, data);
-              ui.showSuccess(`'${file.name}' をエイリアス '${alias}' でアタッチしました`);
-            } catch (attachErr) {
-              ui.showError(`'${file.name}' のアタッチ失敗: ${attachErr.message}`);
-            }
-          }
+          await attachFilesToDb(db, files, ui, 0, toAttachAlias);
         } else {
-          // 初回: 1ファイル目をメインDBとして読み込み
           const firstFile = files[0];
           console.log('選択されたDBファイル:', firstFile.name);
           const firstData = new Uint8Array(await readFileAsArrayBuffer(firstFile));
@@ -185,18 +245,7 @@ export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
           currentDbPath = firstFile.name;
           mainHidden = false;
           ui.showSuccess(`データベース '${firstFile.name}' を開きました`);
-          // 2ファイル目以降をATTACH
-          for (let i = 1; i < files.length; i++) {
-            const file = files[i];
-            const data = new Uint8Array(await readFileAsArrayBuffer(file));
-            const alias = toAttachAlias(file.name, db);
-            try {
-              db.attachDatabase(alias, data);
-              ui.showSuccess(`'${file.name}' をエイリアス '${alias}' でアタッチしました`);
-            } catch (attachErr) {
-              ui.showError(`'${file.name}' のアタッチ失敗: ${attachErr.message}`);
-            }
-          }
+          await attachFilesToDb(db, files, ui, 1, toAttachAlias);
         }
         refreshTrees();
         const dbStatusElem = document.getElementById('db-status');
@@ -361,7 +410,11 @@ export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
   }
 };
 
-// 新規データベースを作成する処理
+/**
+ * 新規データベースを作成する処理
+ * @param ui
+ * @param db
+ */
 const handleNewDatabase = async (ui, db) => {
   try {
     // ブラウザ環境
@@ -395,7 +448,12 @@ const handleNewDatabase = async (ui, db) => {
   }
 };
 
-// データベースクリック時の処理
+/**
+ * データベースクリック時の処理
+ * @param ui
+ * @param db
+ * @param dbPath
+ */
 const handleDatabaseClick = (ui, db, dbPath) => {
   try {
     const schemas = db.getAllDatabaseSchemas();
@@ -408,7 +466,13 @@ const handleDatabaseClick = (ui, db, dbPath) => {
   }
 };
 
-// テーブルクリック時の処理
+/**
+ * テーブルクリック時の処理
+ * @param ui
+ * @param db
+ * @param dbPath
+ * @param tableName
+ */
 const handleTableClick = (ui, db, dbPath, tableName) => {
   try {
     // テーブルのSELECT文をエディタに設定
@@ -421,6 +485,11 @@ const handleTableClick = (ui, db, dbPath, tableName) => {
   }
 };
 
+/**
+ *
+ * @param fileName
+ * @param db
+ */
 const toAttachAlias = (fileName, db) => {
   const baseAlias = fileName.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_').replace(/^([0-9])/, '_$1') || 'attached_db';
   let alias = baseAlias;
@@ -432,53 +501,95 @@ const toAttachAlias = (fileName, db) => {
   return alias;
 };
 
-// ヘルパー: ファイル保存 (DB用)
+/**
+ * ヘルパー: ファイル保存 (DB用)
+ * @param filename
+ * @param contents
+ */
 function saveFile(filename, contents) {
   const blob = new Blob([contents], { type: 'application/sqlite.db' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
 }
-// ヘルパー: ファイル選択ダイアログ（単一ファイル）
+
+/**
+ * ヘルパー: ファイル選択ダイアログ（単一ファイル）
+ */
 async function getFile() {
   return new Promise(resolve => {
     const input = document.createElement('input'); input.type = 'file'; input.accept = '.db';
+    /**
+     *
+     */
     input.onchange = () => resolve(input.files[0]); input.click();
   });
 }
-// ヘルパー: ファイル選択ダイアログ（複数ファイル対応）
+
+/**
+ * ヘルパー: ファイル選択ダイアログ（複数ファイル対応）
+ */
 async function getFiles() {
   return new Promise(resolve => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.db';
     input.multiple = true;
+    /**
+     *
+     */
     input.onchange = () => resolve(Array.from(input.files));
     input.click();
   });
 }
-// ヘルパー: ファイルをArrayBufferで読み取り
+
+/**
+ * ヘルパー: ファイルをArrayBufferで読み取り
+ * @param file
+ */
 async function readFileAsArrayBuffer(file) {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader(); reader.onload = () => resolve(reader.result);
+    const reader = new FileReader(); /**
+     *
+     */
+    reader.onload = () => resolve(reader.result);
     reader.onerror = reject; reader.readAsArrayBuffer(file);
   });
 }
-// ヘルパー: ファイル選択ダイアログ (SQL用)
+
+/**
+ * ヘルパー: ファイル選択ダイアログ (SQL用)
+ */
 async function getSqlFile() {
   return new Promise(resolve => {
     const input = document.createElement('input'); input.type = 'file'; input.accept = '.sql';
+    /**
+     *
+     */
     input.onchange = () => resolve(input.files[0]); input.click();
   });
 }
-// ヘルパー: ファイルをテキストで読み取り
+
+/**
+ * ヘルパー: ファイルをテキストで読み取り
+ * @param file
+ */
 async function readFileAsText(file) {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader(); reader.onload = () => resolve(reader.result);
+    const reader = new FileReader(); /**
+     *
+     */
+    reader.onload = () => resolve(reader.result);
     reader.onerror = reject; reader.readAsText(file);
   });
 }
-// ヘルパー: テキストファイル保存
+
+/**
+ * ヘルパー: テキストファイル保存
+ * @param filename
+ * @param contents
+ * @param mimeType
+ */
 function saveTextFile(filename, contents, mimeType = 'text/plain') {
   const blob = new Blob([contents], { type: mimeType });
   const url = URL.createObjectURL(blob);

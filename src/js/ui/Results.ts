@@ -8,7 +8,11 @@ import 'datatables.net-fixedheader-dt';
 import 'datatables.net-fixedheader-dt/css/fixedHeader.dataTables.min.css';
 const DataTable = $.fn.DataTable;
 
-// 結果グリッドを更新する関数（tableId指定対応）
+/**
+ * 結果グリッドを更新する関数（tableId指定対応）
+ * @param data
+ * @param tableId
+ */
 export const updateResultsGrid = (data, tableId = 'results-table') => {
   if (!data || !data.results) return;
   // テーブルを取得して中身をクリア
@@ -40,7 +44,9 @@ export const updateResultsGrid = (data, tableId = 'results-table') => {
   table.appendChild(tbody);
 };
 
-// 現在アクティブなResultsタブのテーブルからデータを取得
+/**
+ * 現在アクティブなResultsタブのテーブルからデータを取得
+ */
 export function getCurrentResults() {
   const tabs = document.querySelector('.results-tabs');
   if (!tabs) return null;

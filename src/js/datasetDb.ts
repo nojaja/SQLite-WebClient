@@ -3,12 +3,26 @@ const DATASET_STORAGE_KEY = 'sqlite-webclient.dataset-db.v1';
 const SIMPLE_IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const STRICT_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
 
+/**
+ *
+ * @param value
+ */
 const escapeIdentifier = (value) => String(value).replace(/"/g, '""');
 
+/**
+ *
+ * @param value
+ */
 export const formatIdentifier = (value) => (
   SIMPLE_IDENTIFIER_PATTERN.test(value) ? value : `"${escapeIdentifier(value)}"`
 );
 
+/**
+ *
+ * @param schemaName
+ * @param tableName
+ * @param limit
+ */
 export const buildSelectAllQuery = (schemaName, tableName, limit = 100) => {
   const qualifiedName = (!schemaName || schemaName === 'main')
     ? formatIdentifier(tableName)
@@ -16,12 +30,22 @@ export const buildSelectAllQuery = (schemaName, tableName, limit = 100) => {
   return `SELECT * FROM ${qualifiedName} LIMIT ${limit}`;
 };
 
+/**
+ *
+ * @param editor
+ * @param tableName
+ * @param schemaName
+ */
 export const setEditorQueryForTable = (editor, tableName, schemaName = 'main') => {
   if (!editor) return;
   editor.value = buildSelectAllQuery(schemaName, tableName);
   editor.focus();
 };
 
+/**
+ *
+ * @param bytes
+ */
 const uint8ArrayToBase64 = (bytes) => {
   let binary = '';
   const chunkSize = 0x8000;
@@ -31,6 +55,10 @@ const uint8ArrayToBase64 = (bytes) => {
   return btoa(binary);
 };
 
+/**
+ *
+ * @param base64
+ */
 const base64ToUint8Array = (base64) => {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -40,26 +68,46 @@ const base64ToUint8Array = (base64) => {
   return bytes;
 };
 
+/**
+ *
+ */
 const loadPersistedDataset = () => {
   if (typeof window === 'undefined' || !window.localStorage) return null;
   const encoded = window.localStorage.getItem(DATASET_STORAGE_KEY);
   return encoded ? base64ToUint8Array(encoded) : null;
 };
 
+/**
+ *
+ * @param db
+ */
 export const persistDatasetDatabase = (db) => {
   if (typeof window === 'undefined' || !window.localStorage) return;
   const exported = db.exportAttachedDatabase(DATASET_DB_ALIAS);
   window.localStorage.setItem(DATASET_STORAGE_KEY, uint8ArrayToBase64(exported));
 };
 
+/**
+ *
+ * @param db
+ */
 export const ensureDatasetDatabase = (db) => {
   if (db.hasAttachedDatabase(DATASET_DB_ALIAS)) return false;
   db.attachDatabase(DATASET_DB_ALIAS, loadPersistedDataset());
   return true;
 };
 
+/**
+ *
+ * @param db
+ */
 export const listDatasetTables = (db) => db.getDatabaseSchema(DATASET_DB_ALIAS).tables || [];
 
+/**
+ *
+ * @param db
+ * @param tableName
+ */
 export const getDatasetRows = (db, tableName) => {
   const sql = `SELECT * FROM ${formatIdentifier(DATASET_DB_ALIAS)}.${formatIdentifier(tableName)}`;
   const [result] = db.db.exec(sql);
@@ -67,11 +115,20 @@ export const getDatasetRows = (db, tableName) => {
   return result.values.map((values) => Object.fromEntries(result.columns.map((column, index) => [column, values[index]])));
 };
 
+/**
+ *
+ * @param value
+ */
 const normalizeTableNameSeed = (value) => {
   const trimmed = String(value || '').trim();
   return trimmed || 'dataset';
 };
 
+/**
+ *
+ * @param db
+ * @param requestedName
+ */
 export const resolveDatasetTableName = (db, requestedName) => {
   const baseName = normalizeTableNameSeed(requestedName);
   const existing = new Set(listDatasetTables(db));
@@ -85,6 +142,10 @@ export const resolveDatasetTableName = (db, requestedName) => {
   return candidate;
 };
 
+/**
+ *
+ * @param value
+ */
 const inferColumnType = (value) => {
   if (value === null || value === undefined || value === '') return 'TEXT';
   const normalized = String(value).trim();
@@ -94,16 +155,34 @@ const inferColumnType = (value) => {
   return 'TEXT';
 };
 
+/**
+ *
+ * @param columns
+ * @param sampleRow
+ */
 const buildColumnDefinitions = (columns, sampleRow = {}) => columns.map((column) => ({
   name: column,
   type: inferColumnType(sampleRow[column])
 }));
 
+/**
+ *
+ * @param db
+ * @param tableName
+ * @param columnDefinitions
+ */
 const createDatasetTable = (db, tableName, columnDefinitions) => {
   const sql = `CREATE TABLE ${formatIdentifier(DATASET_DB_ALIAS)}.${formatIdentifier(tableName)} (${columnDefinitions.map(({ name, type }) => `${formatIdentifier(name)} ${type}`).join(', ')})`;
   db.db.exec(sql);
 };
 
+/**
+ *
+ * @param db
+ * @param tableName
+ * @param columns
+ * @param rows
+ */
 const insertRowsIntoDataset = (db, tableName, columns, rows) => {
   if (!rows.length) return;
   const insertSql = `INSERT INTO ${formatIdentifier(DATASET_DB_ALIAS)}.${formatIdentifier(tableName)} (${columns.map(formatIdentifier).join(', ')}) VALUES (${columns.map((column) => `$${column}`).join(', ')})`;
@@ -128,6 +207,13 @@ const insertRowsIntoDataset = (db, tableName, columns, rows) => {
   }
 };
 
+/**
+ *
+ * @param db
+ * @param requestedName
+ * @param columns
+ * @param rows
+ */
 export const registerRowsAsDatasetTable = (db, requestedName, columns, rows) => {
   if (!columns.length || !rows.length) {
     throw new Error('登録できるデータがありません');
@@ -140,6 +226,12 @@ export const registerRowsAsDatasetTable = (db, requestedName, columns, rows) => 
   return tableName;
 };
 
+/**
+ *
+ * @param db
+ * @param requestedName
+ * @param tableElement
+ */
 export const registerHtmlTableAsDataset = (db, requestedName, tableElement) => {
   const columns = Array.from(tableElement.querySelectorAll('thead th')).map((th) => th.textContent);
   const rows = Array.from(tableElement.querySelectorAll('tbody tr')).map((tr) => {
@@ -149,6 +241,11 @@ export const registerHtmlTableAsDataset = (db, requestedName, tableElement) => {
   return registerRowsAsDatasetTable(db, requestedName, columns, rows);
 };
 
+/**
+ *
+ * @param db
+ * @param tableName
+ */
 export const deleteDatasetTable = (db, tableName) => {
   ensureDatasetDatabase(db);
   const sql = `DROP TABLE IF EXISTS ${formatIdentifier(DATASET_DB_ALIAS)}.${formatIdentifier(tableName)}`;
@@ -156,8 +253,17 @@ export const deleteDatasetTable = (db, tableName) => {
   persistDatasetDatabase(db);
 };
 
+/**
+ *
+ * @param fileName
+ */
 const getFileBaseName = (fileName) => String(fileName).replace(/\.[^.]+$/, '');
 
+/**
+ *
+ * @param db
+ * @param file
+ */
 export const importCsvFileAsDataset = async (db, file) => {
   ensureDatasetDatabase(db);
   const text = await file.text();

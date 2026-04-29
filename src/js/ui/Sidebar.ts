@@ -2,7 +2,9 @@ import { UI_IDS } from './constants';
 import { getActiveSqlEditor } from './QueryArea';
 import { DATASET_DB_ALIAS, listDatasetTables, setEditorQueryForTable } from '../datasetDb';
 
-// Sidebar（複数ツリー対応）を作成する関数
+/**
+ * Sidebar（複数ツリー対応）を作成する関数
+ */
 export const createSidebar = () => {
   const sidebar = document.createElement('div');
   sidebar.id = UI_IDS.SIDEBAR;
@@ -95,7 +97,10 @@ export const createSidebar = () => {
   return sidebar;
 };
 
-// データベースツリービューを更新する関数（スキーマ配列対応）
+/**
+ * データベースツリービューを更新する関数（スキーマ配列対応）
+ * @param schemas
+ */
 export const updateDatabaseTree = (schemas) => {
   const treeView = document.getElementById(UI_IDS.DB_TREE);
   const previousOpenState = captureDatabaseOpenState(treeView);
@@ -183,6 +188,10 @@ export const updateDatabaseTree = (schemas) => {
   }
 };
 
+/**
+ *
+ * @param treeView
+ */
 const captureDatabaseOpenState = (treeView) => {
   const states = new Map();
   if (!treeView) return states;
@@ -197,7 +206,10 @@ const captureDatabaseOpenState = (treeView) => {
   return states;
 };
 
-// データセットツリーを更新する関数
+/**
+ * データセットツリーを更新する関数
+ * @param db
+ */
 export const updateDatasetTree = (db) => {
   const datasetTreeView = document.getElementById('dataset-tree');
   if (!datasetTreeView) return;
@@ -236,7 +248,9 @@ export const updateDatasetTree = (db) => {
   });
 };
 
-// Sidebarのデータセット名クリックでクエリエディタにSQLを挿入
+/**
+ * Sidebarのデータセット名クリックでクエリエディタにSQLを挿入
+ */
 export function setupDatasetTreeClickHandler() {
   const datasetTreeView = document.getElementById('dataset-tree');
   if (!datasetTreeView || datasetTreeView.dataset.clickBound === 'true') return;
@@ -249,6 +263,14 @@ export function setupDatasetTreeClickHandler() {
   });
 }
 
+/**
+ *
+ * @param root0
+ * @param root0.db
+ * @param root0.showSuccess
+ * @param root0.showError
+ * @param root0.onDatasetChanged
+ */
 export function setupDatasetUploadHandler({ db, showSuccess, showError, onDatasetChanged }) {
   const dsUploadBtn = document.getElementById('add-dataset-button');
   if (!dsUploadBtn || dsUploadBtn.dataset.uploadBound === 'true') return;
@@ -267,10 +289,10 @@ export function setupDatasetUploadHandler({ db, showSuccess, showError, onDatase
         if (!file) return;
         const { importCsvFileAsDataset } = await import('../datasetDb');
         const tableName = await importCsvFileAsDataset(db, file);
-        showSuccess && showSuccess(`データセット「${tableName}」を登録しました`);
-        onDatasetChanged && onDatasetChanged();
+        showSuccess?.(`データセット「${tableName}」を登録しました`);
+        onDatasetChanged?.();
       } catch (error) {
-        showError && showError(error.message || 'CSVの読み込みに失敗しました');
+        showError?.(error.message || 'CSVの読み込みに失敗しました');
       } finally {
         document.body.removeChild(input);
       }
@@ -280,7 +302,13 @@ export function setupDatasetUploadHandler({ db, showSuccess, showError, onDatase
   });
 }
 
-// ツリービューのグループを作成するヘルパー関数
+/**
+ * ツリービューのグループを作成するヘルパー関数
+ * @param title
+ * @param items
+ * @param iconName
+ * @param dbAlias
+ */
 const createTreeGroup = (title, items, iconName, dbAlias = 'main') => {
   const groupContainer = document.createElement('div');
   groupContainer.classList.add('tree-group');

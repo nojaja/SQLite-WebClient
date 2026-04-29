@@ -3,12 +3,17 @@ import { UI_IDS } from './constants';
 import * as ResultsArea from './ResultsArea';
 import * as MessagesArea from './MessagesArea';
 
-// Vue移行後: Vueがレンダリング済みのDOM構造に対してパネルエリアの動作を設定する
+/**
+ * Vue移行後: Vueがレンダリング済みのDOM構造に対してパネルエリアの動作を設定する
+ */
 export function setupPanelArea() {
     const resultsTabs = document.querySelector('.results-tabs') as HTMLElement;
     if (!resultsTabs) return;
 
-    // タブ切り替え時のアクション
+    /**
+     * タブ切り替え時のアクション
+     * @param tab
+     */
     const activeAction = (tab: HTMLElement) => {
         const resultsMenuBar = document.querySelector('.results-menu-bar') as HTMLElement;
         const resultsGrid = document.getElementById(UI_IDS.RESULTS_GRID);
@@ -28,7 +33,13 @@ export function setupPanelArea() {
         }
     };
 
-    // タブを追加するローカル関数（PanelAreaViewと同等の動作）
+    /**
+     * タブを追加するローカル関数（PanelAreaViewと同等の動作）
+     * @param label
+     * @param id
+     * @param addaction
+     * @param removeaction
+     */
     const addTab = (
         label: string,
         id: string = null,
@@ -78,7 +89,11 @@ export function setupPanelArea() {
     // Messagesタブを追加
     addTab('Messages', 'messages-area');
 
-    // window.addResults をセットアップ（クエリ実行結果タブの動的追加）
+    /**
+     * window.addResults をセットアップ（クエリ実行結果タブの動的追加）
+     * @param label
+     * @param tableId
+     */
     (window as any).addResults = (label: string, tableId: string = null) => {
         const tabs = document.querySelector('.results-tabs') as HTMLElement;
         const resultsGrid = document.getElementById(UI_IDS.RESULTS_GRID);
@@ -129,7 +144,9 @@ export function setupPanelArea() {
     };
 }
 
-// 後方互換のためcreatingPanelAreaも残す（Vue移行前のコードから呼ばれる場合）
+/**
+ * 後方互換のためcreatingPanelAreaも残す（Vue移行前のコードから呼ばれる場合）
+ */
 export function createPanelArea() {
     setupPanelArea();
     return document.querySelector('.panel-area') as HTMLElement;

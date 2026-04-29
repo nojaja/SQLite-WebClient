@@ -8,7 +8,15 @@ import { splitQuery, sqliteSplitterOptions } from 'dbgate-query-splitter';
 //デバッグ用のsourceMap設定
 sourceMapSupport.install();
 
+/**
+ *
+ */
 class SQLiteManager {
+  /**
+   *
+   * @param data
+   * @param options
+   */
   static async initialize(data, options = {}) {
     // SQLite モジュールを初期化
     // Ensure global.window is set to simulate browser environment for wasm
@@ -28,6 +36,11 @@ class SQLiteManager {
         print: options.print || (() => { }),
         printErr: options.printErr || (() => { }),
         wasmBinary,
+        /**
+         *
+         * @param imports
+         * @param successCallback
+         */
         instantiateWasm: (imports, successCallback) => {
           WebAssembly.instantiate(wasmBinary, imports)
             .then(({ instance, module }) => successCallback(instance, module));
@@ -46,6 +59,11 @@ class SQLiteManager {
         return sqlite3_instance;
     }
 
+    /**
+     *
+     * @param sqlite3
+     * @param options
+     */
     constructor(sqlite3, options = {}) {
         this.print = options.print || (() => { });
         this.printErr = options.printErr || (() => { });
@@ -54,6 +72,10 @@ class SQLiteManager {
         this.db = null;
     }
 
+    /**
+     *
+     * @param data
+     */
     async setupEnvironment(data) {
         // ファイル名生成
         this.currentFilename = "dbfile_" + (0xffffffff * Math.random() >>> 0);
@@ -77,21 +99,39 @@ class SQLiteManager {
         this.original.db.prepare = this.db.prepare;
         this.original.db.exec = this.db.exec;
 
-        // db.prepareをオーバーライド
+        /**
+         * db.prepareをオーバーライドして、SQLiteManagerのカスタマイズを適用
+         * @param sql
+         */
         this.db.prepare = (sql) => {
             // 元のprepareメソッドを呼び出し
             const stmt = this.original.db.prepare.call(this.db, sql);
-            // SQLiteManagerのカスタマイズを適用
+            
+            /**
+             * SQLiteManagerのカスタマイズを適用
+             */
             stmt.getRowAsObject = () => this.getRowAsObject.call(this, stmt);
+            /**
+             *
+             */
             stmt.getAsObject = () => this.getRowAsObject.call(this, stmt); //sql.js
             stmt._bind = stmt.bind;
+            /**
+             *
+             * @param {...any} args
+             */
             stmt.bind = (...args) => {
                 return this.bind.apply(this, [stmt, ...args]);
             }
 
             return stmt;
         };
-        // db.execをオーバーライド
+        
+        /**
+         * db.execをオーバーライド
+         * @param sql
+         * @param bind
+         */
         this.db.exec = (sql, bind) => {
             const results = [];
             let columnNames = [];
@@ -100,6 +140,10 @@ class SQLiteManager {
                     sql: sql,
                     bind: bind,
                     rowMode: 'object',
+                    /**
+                     *
+                     * @param row
+                     */
                     callback: (row) => {
                         columnNames = Array.from(new Set([...columnNames, ...Object.keys(row)]));
                         results.push(Object.values(row));
@@ -115,12 +159,19 @@ class SQLiteManager {
         };
     }
 
+  /**
+   *
+   * @param sql
+   */
   splitStatements(sql) {
     // dbgate-query-splitterでSQL文を分割
     return splitQuery(sql, sqliteSplitterOptions);
   }
 
-    // ヘルパーメソッド：行データをオブジェクトとして取得
+    /**
+     * ヘルパーメソッド：行データをオブジェクトとして取得
+     * @param stmt
+     */
     getRowAsObject(stmt) {
         const obj = {};
         const columnNames = stmt.getColumnNames();
@@ -130,7 +181,11 @@ class SQLiteManager {
         return obj;
     }
 
-    // ヘルパーメソッド：バインドオブジェクトをフィルタリングしてバインドする
+    /**
+     * ヘルパーメソッド：バインドオブジェクトをフィルタリングしてバインドする
+     * @param stmt
+     * @param bindObject
+     */
     filteredBindObject(stmt, bindObject) {
         if (bindObject && typeof bindObject === 'object') {
             // すべてのキー名を$付きに変換
@@ -145,6 +200,11 @@ class SQLiteManager {
         }
     }
 
+    /**
+     *
+     * @param stmt
+     * @param {...any} args
+     */
     bind(stmt, ...args) {
         stmt.reset();
         if (args.length === 1 && args[0] && typeof args[0] === 'object') {
@@ -155,6 +215,11 @@ class SQLiteManager {
         }
     }
 
+  /**
+   *
+   * @param query
+   * @param bind
+   */
   executeQuery(query, bind) {
     const results = [];
     try {
@@ -179,7 +244,10 @@ class SQLiteManager {
     }
   }
 
-  // エイリアス名バリデーション（SQL インジェクション対策）
+  /**
+   * エイリアス名バリデーション（SQL インジェクション対策）
+   * @param alias
+   */
   static _validateAlias(alias) {
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(alias)) {
       throw new Error(`無効なエイリアス名です: "${alias}" (英数字・アンダースコアのみ、先頭は英字またはアンダースコア)`);
@@ -203,7 +271,10 @@ class SQLiteManager {
     return alias;
   }
 
-  /** アタッチ済み DB をデタッチする */
+  /**
+   * アタッチ済み DB をデタッチする
+   * @param alias
+   */
   detachDatabase(alias) {
     SQLiteManager._validateAlias(alias);
     this.original.db.exec.call(this.db, { sql: `DETACH DATABASE "${alias}"` });
@@ -221,10 +292,18 @@ class SQLiteManager {
     }));
   }
 
+  /**
+   *
+   * @param alias
+   */
   hasAttachedDatabase(alias) {
     return this.listAttachedDatabases().some(dbInfo => dbInfo.name === alias);
   }
 
+  /**
+   *
+   * @param alias
+   */
   exportAttachedDatabase(alias) {
     SQLiteManager._validateAlias(alias);
     if (alias === 'main') return this.export();
@@ -240,6 +319,10 @@ class SQLiteManager {
     }
   }
 
+  /**
+   *
+   * @param schemaName
+   */
   getDatabaseSchema(schemaName = 'main') {
     const sql = `SELECT type, name FROM "${schemaName}".sqlite_master WHERE type IN ('table','view','index','trigger') ORDER BY type,name`;
     const schema = { alias: schemaName, tables: [], views: [], indexes: [], triggers: [] };
@@ -265,21 +348,35 @@ class SQLiteManager {
     return dbs.map(d => this.getDatabaseSchema(d.name));
   }
 
+  /**
+   *
+   * @param tableName
+   */
   getTableStructure(tableName) {
     const sql = `PRAGMA table_info(${tableName})`;
     const [rows] = this.db.exec(sql);
     return rows.values.map(vals => Object.fromEntries(rows.columns.map((c, i) => [c, vals[i]])));
   }
   
+    /**
+     *
+     */
     export() {
     return this.sqlite3.capi.sqlite3_js_db_export(this.db);
     }
 
+    /**
+     *
+     * @param contents
+     */
     async import(contents) {
         this.db.close();
         await this.setupEnvironment(contents);
     }
 
+    /**
+     *
+     */
     close() {
         this.db.close();
     }

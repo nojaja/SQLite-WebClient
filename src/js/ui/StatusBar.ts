@@ -1,6 +1,8 @@
 import { UI_IDS } from './constants';
 
-// ステータスバーを作成する関数
+/**
+ * ステータスバーを作成する関数
+ */
 export const createStatusBar = () => {
   const statusBar = document.createElement('div');
   statusBar.id = UI_IDS.STATUS_BAR;
@@ -14,7 +16,11 @@ export const createStatusBar = () => {
   statusBar.appendChild(dbStatus);
   return statusBar;
 };
-// エラーメッセージを表示する関数
+
+/**
+ * エラーメッセージを表示する関数
+ * @param message
+ */
 export const showError = (message) => {
   const statusBar = document.getElementById(UI_IDS.STATUS_BAR);
   const dbStatusEl = document.getElementById('db-status');
@@ -27,7 +33,10 @@ export const showError = (message) => {
   }, 5000);
 };
 
-// 成功メッセージを表示する関数
+/**
+ * 成功メッセージを表示する関数
+ * @param message
+ */
 export const showSuccess = (message) => {
   const statusBar = document.getElementById(UI_IDS.STATUS_BAR);
   const dbStatusEl = document.getElementById('db-status');

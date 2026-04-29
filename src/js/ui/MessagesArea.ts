@@ -1,4 +1,7 @@
-// messages-area（メッセージ表示エリア）を生成する関数
+
+/**
+ * messages-area（メッセージ表示エリア）を生成する関数
+ */
 export function createMessagesArea() {
   const messagesArea = document.createElement('div');
   messagesArea.id = 'messages-area';
@@ -7,7 +10,10 @@ export function createMessagesArea() {
   return messagesArea;
 }
 
-// messages-areaの内容をセット
+/**
+ * messages-areaの内容をセット
+ * @param msg
+ */
 export function setMessages(msg) {
   const area = getMessagesArea();
   if (!area) return;
@@ -18,18 +24,24 @@ export function setMessages(msg) {
   }
 }
 
-// messages-area要素を取得
+/**
+ * messages-area要素を取得
+ */
 export function getMessagesArea() {
   return document.getElementById('messages-area');
 }
 
-// messages-areaを表示
+/**
+ * messages-areaを表示
+ */
 export function showMessagesArea() {
   const area = getMessagesArea();
   if (area) area.style.display = '';
 }
 
-// messages-areaを非表示
+/**
+ * messages-areaを非表示
+ */
 export function hideMessagesArea() {
   const area = getMessagesArea();
   if (area) area.style.display = 'none';

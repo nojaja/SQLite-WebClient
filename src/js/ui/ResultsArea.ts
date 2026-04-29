@@ -2,6 +2,9 @@ import { UI_IDS } from './constants';
 import { updateDatasetTree } from './Sidebar';
 import { registerHtmlTableAsDataset } from '../datasetDb';
 
+/**
+ *
+ */
 export function createResultsArea() {
   const resultsGrid = document.createElement('div');
   resultsGrid.id = UI_IDS.RESULTS_GRID;
@@ -32,20 +35,35 @@ export function createResultsArea() {
   return { resultsArea, resultsGrid, resultsMenuBar };
 }
 
+/**
+ *
+ */
 export function getResultsArea() {
   return document.getElementById(UI_IDS.RESULTS_AREA);
 }
 
+/**
+ *
+ */
 export function showResultsArea() {
   const area = getResultsArea();
   if (area) area.style.display = '';
 }
 
+/**
+ *
+ */
 export function hideResultsArea() {
   const area = getResultsArea();
   if (area) area.style.display = 'none';
 }
 
+/**
+ *
+ * @param ui
+ * @param db
+ * @param onDatasetChanged
+ */
 export function setupRegisterDatasetHandler(ui, db, onDatasetChanged) {
   const btn = document.getElementById('register-dataset-btn');
   if (!btn || btn.dataset.registerBound === 'true') return;
@@ -55,14 +73,14 @@ export function setupRegisterDatasetHandler(ui, db, onDatasetChanged) {
     const tabs = document.querySelector('.results-tabs');
     const activeTab = tabs && tabs.querySelector('.result-tab.active');
     if (!activeTab) {
-      ui && ui.showError && ui.showError('No active results tab found');
+      ui?.showError?.('No active results tab found');
       return;
     }
 
     const tableId = activeTab.dataset.resultsId || 'results-table';
     const table = document.getElementById(tableId);
     if (!table) {
-      ui && ui.showError && ui.showError('Results table not found');
+      ui?.showError?.('Results table not found');
       return;
     }
 
@@ -71,11 +89,11 @@ export function setupRegisterDatasetHandler(ui, db, onDatasetChanged) {
 
     try {
       const registeredName = registerHtmlTableAsDataset(db, name, table);
-      ui && ui.showSuccess && ui.showSuccess(`Dataset '${registeredName}' registered`);
+      ui?.showSuccess?.(`Dataset '${registeredName}' registered`);
       updateDatasetTree(db);
-      onDatasetChanged && onDatasetChanged();
+      onDatasetChanged?.();
     } catch (error) {
-      ui && ui.showError && ui.showError(error.message || 'Failed to register dataset');
+      ui?.showError?.(error.message || 'Failed to register dataset');
     }
   });
 }
