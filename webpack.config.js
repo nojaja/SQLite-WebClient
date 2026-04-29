@@ -5,6 +5,7 @@ const version = JSON.stringify(require('./package.json').version);
 const CopyPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const webpack = require('webpack');
+const { VueLoaderPlugin } = require('vue-loader');
 
 module.exports = {
   mode: process.env.NODE_ENV === 'production' ? 'development' : 'production',
@@ -40,22 +41,30 @@ module.exports = {
     globalObject: 'this'
   },
   resolve: {
-    extensions: ['.ts', '.tsx', '.js'],
+    extensions: ['.ts', '.tsx', '.js', '.vue'],
     // ブラウザ環境の場合、Node.js固有のモジュールに空のモックを提供
     fallback: {
       'buffer': require.resolve("buffer/"),
       'fs': false,
       'path': require.resolve("path-browserify")
+    },
+    alias: {
+      'vue$': 'vue/dist/vue.esm-bundler.js'
     }
   },
   module: {
     rules: [
       {
+        test: /\.vue$/,
+        loader: 'vue-loader'
+      },
+      {
         test: /\.tsx?$/,
         use: {
           loader: 'ts-loader',
           options: {
-            transpileOnly: true
+            transpileOnly: true,
+            appendTsSuffixTo: [/\.vue$/]
           }
         },
         exclude: /node_modules/
@@ -63,10 +72,15 @@ module.exports = {
       {
         test: /\.css$/,
         use: ['style-loader', 'css-loader']
+      },
+      {
+        test: /\.scss$/,
+        use: ['style-loader', 'css-loader', 'sass-loader']
       }
     ]
   },
   plugins: [
+    new VueLoaderPlugin(),
     new HtmlWebpackPlugin({
       inject: true,
       chunks: ['main'],

@@ -16,6 +16,6 @@
     "baseUrl": ".",
     "types": ["node", "jquery"]
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "playwright.config.ts", "tests/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue", "playwright.config.ts", "tests/**/*.ts"],
   "exclude": ["node_modules", "dist", "playwright-report", "test-results"]
 }

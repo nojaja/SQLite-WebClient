@@ -1,0 +1,528 @@
+// ============================================================
+// Variables
+// ============================================================
+$color-menu-bg: rgb(30, 30, 30);
+$color-bg: #f0f0f0;
+$color-sidebar-bg: #f8f8f8;
+$color-border: #ddd;
+$color-error: #d83b01;
+$color-success: #107c10;
+$color-tree-title-bg: #e8e8e8;
+$color-tab-bg: #f0f0f0;
+$color-accent: #0078d7;
+$color-white: #ffffff;
+
+// ============================================================
+// Base
+// ============================================================
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+  height: 100vh;
+}
+
+// ============================================================
+// App Container
+// ============================================================
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: $color-bg;
+}
+
+// ============================================================
+// Menu Bar
+// ============================================================
+.menu-bar {
+  display: flex;
+  background-color: $color-menu-bg;
+  padding: 4px;
+  color: white;
+}
+
+.menu-group {
+  display: flex;
+  margin-right: 15px;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  padding-right: 15px;
+}
+
+.menu-button {
+  background: none;
+  border: none;
+  color: white;
+  padding: 5px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.icon {
+  margin-right: 5px;
+  font-style: normal;
+}
+
+// ============================================================
+// Main Layout
+// ============================================================
+.main-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+// ============================================================
+// Sidebar
+// ============================================================
+.sidebar {
+  width: 250px;
+  background-color: $color-sidebar-bg;
+  border-right: 1px solid $color-border;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tree-block {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.databases-tree-block {
+  flex: 0 1 auto;
+  max-height: 50%;
+}
+
+.dataset-tree-block {
+  flex: 1 1 0;
+}
+
+.databases-tree-block .tree-view,
+.dataset-tree-block .tree-view {
+  min-height: 0;
+}
+
+.tree-title {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  font-weight: bold;
+  padding: 8px;
+  background-color: $color-tree-title-bg;
+  border-bottom: 1px solid $color-border;
+  height: 3vh;
+}
+
+.tree-view {
+  flex: 1;
+  overflow: auto;
+  padding: 5px;
+}
+
+.tree-item {
+  margin: 2px 0;
+  cursor: pointer;
+}
+
+.tree-label {
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+
+  .material-symbols-outlined {
+    font-size: 18px;
+    margin-right: 4px;
+  }
+
+  .toggle-icon {
+    margin-right: 2px;
+  }
+
+  &:hover {
+    background-color: #e0e0e0;
+  }
+}
+
+.tree-label,
+.tree-view {
+  .menu-button {
+    color: #333;
+    padding: 2px 4px;
+
+    &:hover {
+      background-color: rgba(0, 0, 0, 0.1);
+      color: #000;
+    }
+  }
+}
+
+.tree-items {
+  margin-left: 30px;
+}
+
+.db-children {
+  padding-left: 2px;
+  border-left: 1px solid #d6d6d6;
+}
+
+// ============================================================
+// Main Area
+// ============================================================
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+// ============================================================
+// Query Tabs
+// ============================================================
+.query-tabs {
+  display: flex;
+  background-color: $color-tree-title-bg;
+  border-bottom: 1px solid $color-border;
+}
+
+.query-tab {
+  padding: 8px 15px;
+  background-color: $color-tab-bg;
+  border-right: 1px solid $color-border;
+  cursor: pointer;
+  position: relative;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+
+  &.active {
+    background-color: $color-white;
+  }
+}
+
+.close-tab {
+  margin-left: 8px;
+  font-size: 14px;
+  opacity: 0.6;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+// ============================================================
+// Query Editor
+// ============================================================
+.query-editor {
+  height: 200px;
+  border-bottom: 1px solid $color-border;
+
+  textarea {
+    width: 100%;
+    height: 100%;
+    resize: none;
+    border: none;
+    padding: 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+
+    &:focus {
+      outline: none;
+      box-shadow: none;
+    }
+  }
+}
+
+// ============================================================
+// Results Container
+// ============================================================
+.results-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+// ============================================================
+// Results Tabs
+// ============================================================
+.results-tabs {
+  display: flex;
+  border-bottom: 1px solid $color-border;
+  background-color: $color-tab-bg;
+}
+
+.result-tab {
+  padding: 5px 15px;
+  cursor: pointer;
+
+  &.active {
+    border-bottom: 2px solid $color-accent;
+  }
+}
+
+// ============================================================
+// Results Grid
+// ============================================================
+.results-grid {
+  flex: 1;
+  padding: 0;
+  overflow-y: auto;
+  overflow-x: auto;
+  background-color: $color-white;
+  display: flex;
+  flex-direction: column;
+}
+
+// ============================================================
+// DataTables
+// ============================================================
+.dataTables_wrapper {
+  padding-top: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.dataTables_scrollBody {
+  flex: 1;
+}
+
+table.dataTable {
+  border-collapse: collapse;
+  width: 100%;
+
+  thead th {
+    background-color: $color-tree-title-bg;
+    border: 1px solid $color-border;
+    padding: 8px;
+    text-align: left;
+    font-size: 13px;
+  }
+
+  tbody td {
+    border: 1px solid $color-border;
+    padding: 6px;
+    font-size: 13px;
+  }
+}
+
+.dataTables_info,
+.dataTables_paginate {
+  font-size: 16px;
+  padding: 10px 0;
+}
+
+// ============================================================
+// Status Bar
+// ============================================================
+.status-bar {
+  background-color: $color-bg;
+  border-top: 1px solid $color-border;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: #555;
+  height: 20px;
+}
+
+.status-error {
+  color: $color-error;
+}
+
+.status-success {
+  color: $color-success;
+}
+
+// ============================================================
+// Splitters
+// ============================================================
+.splitter {
+  flex: none;
+  width: 5px;
+  cursor: col-resize;
+  background-color: transparent;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+}
+
+.row-splitter {
+  height: 5px;
+  cursor: row-resize;
+  background-color: transparent;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+}
+
+// ============================================================
+// Icon Button Colors
+// ============================================================
+#refresh-db-button .material-symbols-outlined,
+#add-dataset-button .material-symbols-outlined {
+  color: black;
+}
+
+// ============================================================
+// Help Modal
+// ============================================================
+#help-modal {
+  position: fixed;
+  z-index: 9999;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .modal-overlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.3);
+  }
+
+  .modal-content {
+    position: relative;
+    background: #fff;
+    border-radius: 8px;
+    padding: 32px 24px 20px 24px;
+    min-width: 280px;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.2);
+    z-index: 1;
+  }
+
+  h2 {
+    margin-top: 0;
+  }
+
+  button {
+    margin-top: 16px;
+    padding: 6px 18px;
+    font-size: 15px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    background: $color-bg;
+    cursor: pointer;
+
+    &:hover {
+      background: #e0e0e0;
+    }
+  }
+
+  ul {
+    padding-left: 20px;
+  }
+
+  a {
+    color: $color-accent;
+    text-decoration: underline;
+  }
+}
+
+// ============================================================
+// Panel Area
+// ============================================================
+.panel-area {
+  flex: 1;
+  padding: 0;
+  overflow-y: auto;
+  overflow-x: auto;
+  background-color: $color-white;
+  display: flex;
+  flex-direction: column;
+}
+
+// ============================================================
+// Results Area
+// ============================================================
+.results-area {
+  flex: 1;
+  padding: 0;
+  overflow-y: auto;
+  overflow-x: auto;
+  background-color: $color-white;
+  display: flex;
+  flex-direction: column;
+}
+
+// ============================================================
+// Results Menu Bar
+// ============================================================
+.results-menu-bar {
+  display: flex;
+  align-items: center;
+  background: #555;
+  border-bottom: 1px solid $color-border;
+  padding: 4px;
+  height: 3vh;
+}
+
+// ============================================================
+// Messages Area
+// ============================================================
+.messages-area {
+  flex: 1;
+  padding: 8px;
+  overflow: auto;
+  font-size: 13px;
+}
+
+// ============================================================
+// Responsive / Mobile
+// ============================================================
+@media (max-width: 1400px) {
+  .menu-button {
+    span + span,
+    span:not(.material-symbols-outlined) {
+      display: none !important;
+    }
+
+    min-width: 0;
+    padding: 5px 6px;
+    font-size: 0;
+  }
+
+  .splitter {
+    width: 16px !important;
+    min-width: 16px !important;
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+
+  .row-splitter {
+    height: 16px !important;
+    min-height: 16px !important;
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+
+  .query-editor {
+    height: 100px;
+    min-height: 30px;
+  }
+
+  .tree-label {
+    font-size: 18px !important;
+
+    .material-symbols-outlined {
+      font-size: 20px !important;
+    }
+  }
+}

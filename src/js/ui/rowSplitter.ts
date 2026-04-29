@@ -5,6 +5,15 @@ let currentQueryEditor = null;
 export const createRowSplitter = () => {
   const rowSplitter = document.createElement('div');
   rowSplitter.classList.add('row-splitter');
+  attachRowSplitterEvents(rowSplitter, null);
+  return rowSplitter;
+};
+
+// 既存の水平スプリッター要素にイベントを設定する（Vue移行後に使用）
+export const attachRowSplitterEvents = (rowSplitter: HTMLElement, initialQueryEditor: HTMLElement | null) => {
+  if (initialQueryEditor) {
+    currentQueryEditor = initialQueryEditor;
+  }
 
   // ドラッグ時のqueryEditorElementを都度取得
   rowSplitter.addEventListener('mousedown', (e) => {
@@ -47,9 +56,7 @@ export const createRowSplitter = () => {
   });
 
   // アクティブなquery-editorをセット
-  rowSplitter.setQueryEditor = (editorElem) => {
+  (rowSplitter as any).setQueryEditor = (editorElem) => {
     currentQueryEditor = editorElem;
   };
-
-  return rowSplitter;
 };

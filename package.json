@@ -15,31 +15,36 @@
   "author": "nojaja <free.riccia@gmail.com> (https://github.com/nojaja)",
   "license": "MIT",
   "devDependencies": {
-    "webpack": "^5.99.6",
-    "webpack-cli": "^6.0.1",
-    "webpack-dev-server": "^5.2.1",
+    "@playwright/test": "^1.27.2",
+    "@types/jquery": "^3.5.32",
+    "@types/node": "^22.15.18",
+    "@vue/compiler-sfc": "^3.5.33",
     "copy-webpack-plugin": "^11.0.0",
-    "html-webpack-plugin": "^5.6.3",
     "cross-env": "^7.0.3",
     "css-loader": "^7.1.2",
+    "html-webpack-plugin": "^5.6.3",
+    "playwright": "^1.52.0",
+    "sass": "^1.99.0",
+    "sass-loader": "^16.0.7",
     "style-loader": "^4.0.0",
     "ts-loader": "^9.5.1",
     "typescript": "^5.8.3",
-    "@types/jquery": "^3.5.32",
-    "@types/node": "^22.15.18",
-    "playwright": "^1.52.0",
-    "@playwright/test": "^1.27.2"
+    "vue-loader": "^17.4.2",
+    "webpack": "^5.99.6",
+    "webpack-cli": "^6.0.1",
+    "webpack-dev-server": "^5.2.1"
   },
   "dependencies": {
     "@sqlite.org/sqlite-wasm": "^3.45.3-build3",
-    "dbgate-query-splitter": "^4.11.4",
-    "jquery": "^3.7.1",
     "buffer": "^6.0.3",
-    "process": "^0.11.10",
     "csv-parse": "^5.6.0",
     "csv-stringify": "^6.5.2",
     "datatables.net-dt": "^2.2.2",
     "datatables.net-fixedheader-dt": "^4.0.1",
-    "path-browserify": "^1.0.1"
+    "dbgate-query-splitter": "^4.11.4",
+    "jquery": "^3.7.1",
+    "path-browserify": "^1.0.1",
+    "process": "^0.11.10",
+    "vue": "^3.5.33"
   }
 }

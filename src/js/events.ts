@@ -9,29 +9,40 @@ import { DATASET_DB_ALIAS, deleteDatasetTable, ensureDatasetDatabase } from './d
 // events.js - イベントハンドラーを設定するモジュール
 
 // イベントハンドラーのセットアップ
-export const setupEventHandlers = (ui, db, tabManager) => {
+export const setupEventHandlers = (ui, dbOrPromise: any, tabManager) => {
+  // DB参照（Promise または解決済み値を受け取り、遅延初期化をサポート）
+  let db: any = null;
+  const dbReady: Promise<any> = Promise.resolve(dbOrPromise).then(resolved => {
+    db = resolved;
+    return resolved;
+  });
+
   // 現在のデータベースパス
   let currentDbPath = 'Untitled.db';
   // mainノードを非表示にするフラグ
   let mainHidden = false;
   // 表示用スキーマを取得（mainHiddenフラグを考慮）
   const getDisplaySchemas = () => {
+    if (!db) return [];
     const schemas = db.getAllDatabaseSchemas().filter(schema => schema.alias !== DATASET_DB_ALIAS);
     return mainHidden ? schemas.filter(schema => schema.alias !== 'main') : schemas;
   };
   const refreshTrees = () => {
     ui.updateDatabaseTree(getDisplaySchemas());
-    updateDatasetTree(db);
+    if (db) updateDatasetTree(db);
   };
 
-  ensureDatasetDatabase(db);
-  updateDatasetTree(db);
-  setupRegisterDatasetHandler(ui, db, () => updateDatasetTree(db));
-  setupDatasetUploadHandler({
-    db,
-    showSuccess: ui.showSuccess,
-    showError: ui.showError,
-    onDatasetChanged: () => updateDatasetTree(db)
+  // DB準備完了後に初期設定を実行（Promiseが渡された場合は非同期になる）
+  dbReady.then(resolvedDb => {
+    ensureDatasetDatabase(resolvedDb);
+    updateDatasetTree(resolvedDb);
+    setupRegisterDatasetHandler(ui, resolvedDb, () => updateDatasetTree(resolvedDb));
+    setupDatasetUploadHandler({
+      db: resolvedDb,
+      showSuccess: ui.showSuccess,
+      showError: ui.showError,
+      onDatasetChanged: () => updateDatasetTree(resolvedDb)
+    });
   });
 
   // クエリ実行処理 (DBオブジェクトを使用して常に実行)
@@ -145,8 +156,12 @@ export const setupEventHandlers = (ui, db, tabManager) => {
   if (openDbButton) {
     openDbButton.addEventListener('click', async () => {
       try {
+        // ファイル選択ダイアログを先に開く（filechooserイベントを即時発火させる）
+        // DB初期化完了を待たずにファイル選択UIを起動できるようにする
         const files = await getFiles();
         if (!files || files.length === 0) return;
+        // ファイル選択後にDB初期化完了を待機
+        await dbReady;
         const hasExistingDb = currentDbPath !== 'Untitled.db' || mainHidden;
         if (hasExistingDb) {
           // 既に DB を開いている場合は全ファイルをアタッチで追加

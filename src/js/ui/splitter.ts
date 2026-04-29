@@ -3,11 +3,15 @@
 export const createSplitter = (sidebarElement) => {
   const splitter = document.createElement('div');
   splitter.classList.add('splitter');
+  attachSplitterEvents(splitter, sidebarElement);
+  return splitter;
+};
 
+// 既存のスプリッター要素にイベントを設定する（Vue移行後に使用）
+export const attachSplitterEvents = (splitter: HTMLElement, sidebarElement: HTMLElement) => {
   splitter.addEventListener('mousedown', (e) => {
     e.preventDefault();
     const onMouseMove = (e2) => {
-      // sidebarElement を直接参照するように変更
       sidebarElement.style.width = `${e2.clientX}px`;
     };
     const onMouseUp = () => {
@@ -33,6 +37,4 @@ export const createSplitter = (sidebarElement) => {
     document.addEventListener('touchmove', onTouchMove);
     document.addEventListener('touchend', onTouchEnd);
   });
-
-  return splitter;
 };

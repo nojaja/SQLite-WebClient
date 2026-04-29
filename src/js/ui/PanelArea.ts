@@ -1,71 +1,115 @@
 // PanelArea.js
 import { UI_IDS } from './constants';
-import * as PanelAreaView from './PanelAreaView';
 import * as ResultsArea from './ResultsArea';
 import * as MessagesArea from './MessagesArea';
 
-// panel-area（results-tabs, results-area, messages-areaをまとめてラップ）を生成する関数
-export function createPanelArea() {
-    const panelArea = PanelAreaView.createPanelAreaView(
-        // タブ切り替え時のアクションを定義
-        (tab, resultsId) => {
-            const resultsMenuBar = document.querySelector('.results-menu-bar');
-            const resultsGrid = document.getElementById(UI_IDS.RESULTS_GRID);
-            if (tab.textContent === 'Messages') {
-                ResultsArea.hideResultsArea();
-                MessagesArea.showMessagesArea();
-                if (resultsMenuBar) resultsMenuBar.style.display = 'none';
-            } else {
-                ResultsArea.showResultsArea();
-                MessagesArea.hideMessagesArea();
-                if (resultsMenuBar) resultsMenuBar.style.display = 'flex';
-                
-                // resultsGrid内のtableのみ切り替え
+// Vue移行後: Vueがレンダリング済みのDOM構造に対してパネルエリアの動作を設定する
+export function setupPanelArea() {
+    const resultsTabs = document.querySelector('.results-tabs') as HTMLElement;
+    if (!resultsTabs) return;
+
+    // タブ切り替え時のアクション
+    const activeAction = (tab: HTMLElement) => {
+        const resultsMenuBar = document.querySelector('.results-menu-bar') as HTMLElement;
+        const resultsGrid = document.getElementById(UI_IDS.RESULTS_GRID);
+        if (tab.textContent === 'Messages') {
+            ResultsArea.hideResultsArea();
+            MessagesArea.showMessagesArea();
+            if (resultsMenuBar) resultsMenuBar.style.display = 'none';
+        } else {
+            ResultsArea.showResultsArea();
+            MessagesArea.hideMessagesArea();
+            if (resultsMenuBar) resultsMenuBar.style.display = 'flex';
+            if (resultsGrid) {
                 Array.from(resultsGrid.children).forEach(tbl => {
-                    tbl.style.display = (tbl.id === tab.dataset.resultsId) ? '' : 'none';
+                    (tbl as HTMLElement).style.display = (tbl.id === tab.dataset.resultsId) ? '' : 'none';
                 });
             }
-
         }
-    );
+    };
 
-    // Results/Messagesタブを追加する関数
-    function addMessagesTab() {
-        return panelArea.addTab('Messages', 'messages-area');
-    }
+    // タブを追加するローカル関数（PanelAreaViewと同等の動作）
+    const addTab = (
+        label: string,
+        id: string = null,
+        addaction: ((tabs: HTMLElement, tab: HTMLElement) => void) | null = null,
+        removeaction: ((label: string, id: string) => void) | null = null
+    ): HTMLElement => {
+        const newTab = document.createElement('div');
+        newTab.classList.add('result-tab', 'active');
+        newTab.textContent = label;
+        newTab.dataset.resultsId = id || `results-table-${label}`;
 
-    addMessagesTab(); // Messagesタブを追加
+        if (removeaction) {
+            const close = document.createElement('span');
+            close.classList.add('close-tab');
+            close.textContent = '×';
+            close.addEventListener('click', e => {
+                e.stopPropagation();
+                const tabsParent = resultsTabs;
+                removeaction(label, id);
+                newTab.remove();
+                const remainTabs = Array.from(tabsParent.querySelectorAll('.result-tab'))
+                    .filter(t => t !== newTab && t.textContent !== 'Messages') as HTMLElement[];
+                if (remainTabs.length > 0) {
+                    remainTabs[0].classList.add('active');
+                }
+            });
+            newTab.appendChild(close);
+        }
 
-    // 複数Resultsタブ・テーブル追加用
-    window.addResults = (label, tableId = null) => {
-        const tabs = document.querySelector('.results-tabs');
+        if (addaction) {
+            addaction(resultsTabs, newTab);
+        } else {
+            resultsTabs.appendChild(newTab);
+        }
+        return newTab;
+    };
+
+    // タブクリックハンドラ
+    resultsTabs.addEventListener('click', (e: MouseEvent) => {
+        const tab = (e.target as Element).closest('.result-tab') as HTMLElement;
+        if (!tab) return;
+        resultsTabs.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        activeAction(tab);
+    });
+
+    // Messagesタブを追加
+    addTab('Messages', 'messages-area');
+
+    // window.addResults をセットアップ（クエリ実行結果タブの動的追加）
+    (window as any).addResults = (label: string, tableId: string = null) => {
+        const tabs = document.querySelector('.results-tabs') as HTMLElement;
         const resultsGrid = document.getElementById(UI_IDS.RESULTS_GRID);
-        if (!panelArea || !resultsGrid) return null;
+        if (!tabs || !resultsGrid) return null;
 
-        //ResultsSectionController.addResultsTab(panelArea, resultsGrid, label, tableId);
-        const resTab = panelArea.addTab(label, tableId,
-            (resultsTabs,newTab) => {
-                //タブ追加時の処理
+        const resTab = addTab(
+            label,
+            tableId,
+            (resultsTabs, newTab) => {
+                // Messagesタブの直前に挿入
                 const msgTab = tabs.querySelector('.result-tab:last-child');
-                const resultsMenuBar = document.querySelector('.results-menu-bar');
+                const resultsMenuBar = document.querySelector('.results-menu-bar') as HTMLElement;
                 if (resultsMenuBar) resultsMenuBar.style.display = 'flex';
                 resultsTabs.insertBefore(newTab, msgTab);
             },
             (label, id) => {
-                //タブ削除時の処理
-                // 他のタブをアクティブ化（なければMessages）
-                const remainTabs = Array.from(tabs.querySelectorAll('.result-tab')).filter(t => {console.log(t); return t !== resTab && t.textContent !== 'Messages'});
+                const remainTabs = Array.from(tabs.querySelectorAll('.result-tab'))
+                    .filter(t => { console.log(t); return t !== resTab && t.textContent !== 'Messages'; }) as HTMLElement[];
                 if (remainTabs.length > 0) {
                     remainTabs[0].classList.add('active');
                     MessagesArea.hideMessagesArea();
                     ResultsArea.showResultsArea();
-                }else {
-                    const msgTab = tabs.querySelector('.result-tab:last-child');
+                } else {
+                    const msgTab = tabs.querySelector('.result-tab:last-child') as HTMLElement;
                     if (msgTab) msgTab.classList.add('active');
                     MessagesArea.showMessagesArea();
                     ResultsArea.hideResultsArea();
                 }
-            });
+            }
+        );
+
         // テーブル作成
         const resultsTable = document.createElement('table');
         resultsTable.id = resTab.dataset.resultsId;
@@ -79,19 +123,14 @@ export function createPanelArea() {
         if (tabs.querySelectorAll('.result-tab').length === 3) {
             tabs.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
             resTab.classList.add('active');
-            Array.from(resultsGrid.children).forEach(tbl => tbl.style.display = 'none');
+            Array.from(resultsGrid.children).forEach(tbl => (tbl as HTMLElement).style.display = 'none');
             resultsTable.style.display = '';
         }
+    };
+}
 
-    }
-
-    // results-area部分をResultsArea.jsから生成
-    const { resultsArea, resultsGrid, resultsMenuBar } = ResultsArea.createResultsArea();
-
-    // messages-area部分をMessagesArea.jsから生成
-    const messagesArea = MessagesArea.createMessagesArea();
-
-    panelArea.appendChild(resultsArea);
-    panelArea.appendChild(messagesArea);
-    return panelArea;
+// 後方互換のためcreatingPanelAreaも残す（Vue移行前のコードから呼ばれる場合）
+export function createPanelArea() {
+    setupPanelArea();
+    return document.querySelector('.panel-area') as HTMLElement;
 }
