@@ -1,31 +1,38 @@
-import $ from 'jquery';
-import { UI_IDS } from './constants'; // Updated import path
-// DataTablesプラグインを初期化
-import 'datatables.net-dt';
+// datatables.net/manual/vue に準拠した Vue3 版 DataTables セットアップ
+import DataTableVue from 'datatables.net-vue3';
+import DataTablesCore from 'datatables.net-dt';
 import 'datatables.net-dt/css/dataTables.dataTables.min.css';
 // FixedHeader拡張機能
 import 'datatables.net-fixedheader-dt';
 import 'datatables.net-fixedheader-dt/css/fixedHeader.dataTables.min.css';
-const DataTable = $.fn.DataTable;
-void UI_IDS;
-void DataTable;
+
+// Vue3 DataTable コンポーネントにコアライブラリを登録
+DataTableVue.use(DataTablesCore);
 
 /**
  * 結果グリッドを更新する関数（tableId指定対応）
  * @param data クエリ結果データ
  * @param data.columns カラム名の配列
  * @param data.results 行データの配列
- * @param tableId テーブルID
+ * @param tableId コンテナ要素のID
  * @returns void
  */
 export const updateResultsGrid = (data: { columns: string[]; results: Record<string, unknown>[] }, tableId = 'results-table') => {
   if (!data || !data.results) return;
-  // テーブルを取得して中身をクリア
-  const table = document.getElementById(tableId) as HTMLElement | null;
-  if (!table) return;
-  // ヘッダーとボディを作り直し
-  table.innerHTML = '';
-  // theadとtbodyを構築
+  // コンテナ要素を取得
+  const containerEl = document.getElementById(tableId);
+  if (!containerEl) return;
+
+  // 既存の DataTable インスタンスを破棄してからコンテナをクリア
+  const existingTable = containerEl.querySelector('table') as HTMLTableElement | null;
+  if (existingTable && DataTablesCore.isDataTable(existingTable)) {
+    new DataTablesCore(existingTable).destroy();
+  }
+  containerEl.innerHTML = '';
+
+  // thead を構築して table に追加
+  const table = document.createElement('table');
+  table.classList.add('display');
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
   data.columns.forEach((col: string) => {
@@ -35,18 +42,23 @@ export const updateResultsGrid = (data: { columns: string[]; results: Record<str
   });
   thead.appendChild(headerRow);
   table.appendChild(thead);
-  // tbodyの構築
-  const tbody = document.createElement('tbody');
-  data.results.forEach((row: Record<string, unknown>) => {
-    const tr = document.createElement('tr');
-    data.columns.forEach((col: string) => {
-      const td = document.createElement('td');
-      td.textContent = row[col] != null ? String(row[col]) : '';
-      tr.appendChild(td);
-    });
-    tbody.appendChild(tr);
+  containerEl.appendChild(table);
+
+  // DataTables を初期化（Vue版マニュアルと同じパターン）
+  new DataTablesCore(table, {
+    data: data.results,
+    columns: data.columns.map(col => ({ data: col })),
+    paging: true,
+    searching: false,
+    info: false,
+    fixedHeader: false,
+    layout: {
+      topStart: null,
+      topEnd: null,
+      bottomStart: 'pageLength',
+      bottomEnd: 'paging',
+    },
   });
-  table.appendChild(tbody);
 };
 
 /**
@@ -58,14 +70,19 @@ export function getCurrentResults() {
   if (!tabs) return null;
   const activeTab = tabs.querySelector('.result-tab.active') as HTMLElement | null;
   if (!activeTab) return null;
-  const tableId = activeTab.dataset.resultsId || 'results-table';
-  const table = document.getElementById(tableId);
-  if (!table) return null;
+  const containerId = activeTab.dataset.resultsId || 'results-table';
+  const containerEl = document.getElementById(containerId);
+  if (!containerEl) return null;
+
+  const tableEl = containerEl.querySelector('table') as HTMLTableElement | null;
+  if (!tableEl || !DataTablesCore.isDataTable(tableEl)) return null;
+
+  const dt = new DataTablesCore(tableEl);
   // カラム名取得
-  const columns = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent);
-  // 行データ取得
-  const rows = Array.from(table.querySelectorAll('tbody tr')).map(tr =>
-    Array.from(tr.querySelectorAll('td')).map(td => td.textContent)
+  const columns = Array.from(dt.columns().header().toArray()).map((th: Element) => th.textContent);
+  // 行データ取得（DataTables API経由で全行を取得）
+  const rows = (dt.rows().data().toArray() as Record<string, unknown>[]).map(row =>
+    columns.map(col => col != null && row[col] != null ? String(row[col]) : null)
   );
   return { columns, rows };
 }

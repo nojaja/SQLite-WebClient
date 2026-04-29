@@ -14,7 +14,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "baseUrl": ".",
-    "types": ["node", "jquery", "jest"]
+    "types": ["node", "jest"]
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue", "playwright.config.ts", "tests/**/*.ts"],
   "exclude": ["node_modules", "dist", "playwright-report", "test-results"]

@@ -22,8 +22,7 @@
                 <ul>
                     <li><a href="https://www.npmjs.com/package/@sqlite.org/sqlite-wasm"
                             target="_blank">@sqlite.org/sqlite-wasm</a> (Apache-2.0)</li>
-                    <li><a href="https://www.npmjs.com/package/jquery" target="_blank">jQuery</a> (MIT)</li>
-                    <li><a href="https://www.npmjs.com/package/datatables.net-dt" target="_blank">DataTables</a> (MIT)
+                    <li><a href="https://www.npmjs.com/package/datatables.net-vue3" target="_blank">DataTables (Vue3)</a> (MIT)
                     </li>
                     <li><a href="https://www.npmjs.com/package/dbgate-query-splitter"
                             target="_blank">dbgate-query-splitter</a> (MIT)</li>

@@ -127,21 +127,18 @@ export function setupPanelArea() {
             }
         );
 
-        // テーブル作成
-        const resultsTable = document.createElement('table');
-        resultsTable.id = resTab.dataset.resultsId;
-        resultsTable.classList.add('display', 'dataTable');
-        resultsTable.style.display = 'none';
-        const emptyTbody = document.createElement('tbody');
-        resultsTable.appendChild(emptyTbody);
-        resultsGrid.appendChild(resultsTable);
+        // コンテナdivを作成（DataTablesはコンテナ内のtableを管理する）
+        const resultsContainer = document.createElement('div');
+        resultsContainer.id = resTab.dataset.resultsId;
+        resultsContainer.style.display = 'none';
+        resultsGrid.appendChild(resultsContainer);
 
         // 最初の追加時はactiveに
         if (tabs.querySelectorAll('.result-tab').length === 3) {
             tabs.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
             resTab.classList.add('active');
             Array.from(resultsGrid.children).forEach(tbl => (tbl as HTMLElement).style.display = 'none');
-            resultsTable.style.display = '';
+            resultsContainer.style.display = '';
         }
     };
 }
