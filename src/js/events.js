@@ -5,7 +5,7 @@ import { setMessages } from './ui/MessagesArea.js';
 import { getSqlEditor, setSqlEditorValue } from './ui/QueryArea.js';
 import { setupRegisterDatasetHandler } from './ui/ResultsArea.js';
 import { setupDatasetUploadHandler, updateDatasetTree } from './ui/Sidebar.js';
-import { DATASET_DB_ALIAS, ensureDatasetDatabase } from './datasetDb.js';
+import { DATASET_DB_ALIAS, deleteDatasetTable, ensureDatasetDatabase } from './datasetDb.js';
 // events.js - イベントハンドラーを設定するモジュール
 
 // イベントハンドラーのセットアップ
@@ -286,6 +286,21 @@ export const setupEventHandlers = (ui, db, tabManager) => {
       refreshTrees();
     } catch (e) {
       ui.showError(`デタッチ失敗: ${e.message}`);
+    }
+  });
+
+  // Dataset削除ボタンのイベントハンドラ（委任）
+  document.addEventListener('click', (event) => {
+    const deleteBtn = event.target.closest('[data-delete-dataset-table]');
+    if (!deleteBtn) return;
+    const tableName = deleteBtn.dataset.deleteDatasetTable;
+    if (!tableName) return;
+    try {
+      deleteDatasetTable(db, tableName);
+      ui.showSuccess(`データセット「${tableName}」を削除しました`);
+      refreshTrees();
+    } catch (error) {
+      ui.showError(`データセット削除失敗: ${error.message}`);
     }
   });
 

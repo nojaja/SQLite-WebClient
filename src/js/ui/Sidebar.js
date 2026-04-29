@@ -207,7 +207,31 @@ export const updateDatasetTree = (db) => {
   names.forEach(name => {
     const itemElem = document.createElement('div');
     itemElem.classList.add('tree-item');
-    itemElem.innerHTML = `<div class="tree-label dataset" data-name="${name}"><span class="material-symbols-outlined icon">dataset</span> ${name}</div>`;
+    const datasetRow = document.createElement('div');
+    datasetRow.classList.add('tree-label', 'dataset-node');
+    datasetRow.style.display = 'flex';
+    datasetRow.style.alignItems = 'center';
+    datasetRow.style.justifyContent = 'space-between';
+
+    const datasetLabel = document.createElement('span');
+    datasetLabel.classList.add('tree-label', 'dataset');
+    datasetLabel.dataset.name = name;
+    datasetLabel.dataset.datasetTableName = name;
+    datasetLabel.style.display = 'flex';
+    datasetLabel.style.alignItems = 'center';
+    datasetLabel.style.gap = '4px';
+    datasetLabel.innerHTML = `<span class="material-symbols-outlined icon">dataset</span> ${name}`;
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.classList.add('menu-button');
+    deleteBtn.dataset.deleteDatasetTable = name;
+    deleteBtn.title = `データセット「${name}」を削除`;
+    deleteBtn.innerHTML = '<span class="material-symbols-outlined">delete</span>';
+    deleteBtn.style.fontSize = '14px';
+
+    datasetRow.appendChild(datasetLabel);
+    datasetRow.appendChild(deleteBtn);
+    itemElem.appendChild(datasetRow);
     datasetTreeView.appendChild(itemElem);
   });
 };
@@ -218,7 +242,8 @@ export function setupDatasetTreeClickHandler() {
   if (!datasetTreeView || datasetTreeView.dataset.clickBound === 'true') return;
   datasetTreeView.dataset.clickBound = 'true';
   datasetTreeView.addEventListener('click', (e) => {
-    const label = e.target.closest('.tree-label.dataset');
+    if (e.target.closest('[data-delete-dataset-table]')) return;
+    const label = e.target.closest('[data-dataset-table-name]');
     if (!label) return;
     setEditorQueryForTable(getActiveSqlEditor(), label.dataset.name, DATASET_DB_ALIAS);
   });

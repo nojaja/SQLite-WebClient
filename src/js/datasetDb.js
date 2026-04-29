@@ -149,6 +149,13 @@ export const registerHtmlTableAsDataset = (db, requestedName, tableElement) => {
   return registerRowsAsDatasetTable(db, requestedName, columns, rows);
 };
 
+export const deleteDatasetTable = (db, tableName) => {
+  ensureDatasetDatabase(db);
+  const sql = `DROP TABLE IF EXISTS ${formatIdentifier(DATASET_DB_ALIAS)}.${formatIdentifier(tableName)}`;
+  db.db.exec(sql);
+  persistDatasetDatabase(db);
+};
+
 const getFileBaseName = (fileName) => String(fileName).replace(/\.[^.]+$/, '');
 
 export const importCsvFileAsDataset = async (db, file) => {

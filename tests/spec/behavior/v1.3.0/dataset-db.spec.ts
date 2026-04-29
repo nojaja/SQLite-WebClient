@@ -44,4 +44,26 @@ test.describe('dataset DB', () => {
     await expect(datasetItems).toHaveCount(2);
     await expect(page.locator('#dataset-tree')).toContainText('dataset-upload');
   });
+
+  test('データセット削除ボタンで対象テーブルを削除できる', async ({ page }) => {
+    await page.goto('/');
+
+    await page.click('#new-db-button');
+    await page.fill('#sql-editor', 'SELECT * FROM test LIMIT 100;');
+    await page.click('#run-button');
+
+    await page.evaluate(() => {
+      window.prompt = () => 'delete_target';
+    });
+    await page.click('#register-dataset-btn');
+
+    const deleteButton = page.locator('[data-delete-dataset-table="delete_target"]');
+    await expect(deleteButton).toBeVisible();
+    await deleteButton.click();
+
+    await expect(page.locator('#dataset-tree')).not.toContainText('delete_target');
+
+    await page.reload();
+    await expect(page.locator('#dataset-tree')).not.toContainText('delete_target');
+  });
 });
