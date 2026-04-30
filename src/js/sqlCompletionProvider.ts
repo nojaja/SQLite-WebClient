@@ -52,9 +52,83 @@ const SQL_FUNCTIONS = [
   'NTILE', 'LAG', 'LEAD', 'FIRST_VALUE', 'LAST_VALUE', 'NTH_VALUE',
 ];
 
+/** DBスキーマ情報（エイリアスごとのオブジェクト名リスト） */
+export interface DbSchema {
+  alias: string;
+  tables?: string[];
+  views?: string[];
+  indexes?: string[];
+  triggers?: string[];
+}
+
+/** 動的に更新されるDBオブジェクト候補 */
+let dbObjectSuggestions: monaco.languages.CompletionItem[] = [];
+
+/**
+ * 処理名: DBオブジェクト候補更新
+ * 処理概要: DBスキーマとデータセット一覧から補完候補を生成して内部状態を更新する
+ * 実装理由: DB が変更されるたびに補完候補をリアルタイムに反映するため
+ * @param schemas 表示対象のDBスキーマ配列
+ * @param datasetAlias データセットDBのエイリアス名
+ * @param datasetTables データセットテーブル名の配列
+ */
+export function updateDbObjectSuggestions(
+  schemas: DbSchema[],
+  datasetAlias: string,
+  datasetTables: string[]
+): void {
+  const items: monaco.languages.CompletionItem[] = [];
+
+  for (const schema of schemas) {
+    const groups: Array<{ kind: monaco.languages.CompletionItemKind; detail: string; names: string[] }> = [
+      { kind: monaco.languages.CompletionItemKind.Class,    detail: 'Table',   names: schema.tables   ?? [] },
+      { kind: monaco.languages.CompletionItemKind.Module,   detail: 'View',    names: schema.views    ?? [] },
+      { kind: monaco.languages.CompletionItemKind.Property, detail: 'Index',   names: schema.indexes  ?? [] },
+      { kind: monaco.languages.CompletionItemKind.Event,    detail: 'Trigger', names: schema.triggers ?? [] },
+    ];
+    for (const { kind, detail, names } of groups) {
+      for (const name of names) {
+        const qualified = `${schema.alias}.${name}`;
+        items.push({
+          label: qualified,
+          kind,
+          insertText: qualified,
+          detail: `${detail} (${schema.alias})`,
+          range: undefined as unknown as monaco.IRange,
+        });
+        // main DB のテーブルは短縮名（DB名なし）も候補に追加
+        if (schema.alias === 'main' && detail === 'Table') {
+          items.push({
+            label: name,
+            kind,
+            insertText: name,
+            detail: `Table (main)`,
+            sortText: `z_${name}`,
+            range: undefined as unknown as monaco.IRange,
+          });
+        }
+      }
+    }
+  }
+
+  // データセット候補（dataset.テーブル名 形式）
+  for (const name of datasetTables) {
+    const qualified = `${datasetAlias}.${name}`;
+    items.push({
+      label: qualified,
+      kind: monaco.languages.CompletionItemKind.File,
+      insertText: qualified,
+      detail: `Dataset (${datasetAlias})`,
+      range: undefined as unknown as monaco.IRange,
+    });
+  }
+
+  dbObjectSuggestions = items;
+}
+
 /**
  * 処理名: SQL補完プロバイダー登録
- * 処理概要: Monaco Editor の SQL 言語に対して予約語・関数の補完候補を登録する
+ * 処理概要: Monaco Editor の SQL 言語に対して予約語・関数・DBオブジェクトの補完候補を登録する
  * 実装理由: SQLite SQL のオートコンプリートをユーザーに提供するため
  */
 export function registerSqlCompletionProvider(): monaco.IDisposable {
@@ -84,7 +158,7 @@ export function registerSqlCompletionProvider(): monaco.IDisposable {
         range: undefined as unknown as monaco.IRange,
       }));
 
-      return { suggestions: [...keywordItems, ...functionItems] };
+      return { suggestions: [...keywordItems, ...functionItems, ...dbObjectSuggestions] };
     },
   });
 }

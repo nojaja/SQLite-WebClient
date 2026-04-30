@@ -72,6 +72,7 @@ import {
     registerRowsAsDatasetTable,
 } from './datasetDb';
 import SQLiteManager from './SQLiteManager';
+import { updateDbObjectSuggestions } from './sqlCompletionProvider';
 
 // ---- Vueコンポーネント ref ----
 const splitterEl = ref<HTMLElement | null>(null);
@@ -148,8 +149,11 @@ const getDisplaySchemas = (dbInst: SQLiteManager) => {
 const refreshTrees = async () => {
     try {
         const dbInst = await getDb();
-        sidebarRef.value?.updateDatabaseTree(getDisplaySchemas(dbInst));
-        sidebarRef.value?.updateDatasetTree(listDatasetTables(dbInst));
+        const displaySchemas = getDisplaySchemas(dbInst);
+        const datasetTablesList = listDatasetTables(dbInst);
+        sidebarRef.value?.updateDatabaseTree(displaySchemas);
+        sidebarRef.value?.updateDatasetTree(datasetTablesList);
+        updateDbObjectSuggestions(displaySchemas, DATASET_DB_ALIAS, datasetTablesList);
     } catch { /* DB未初期化時は何もしない */ }
 };
 
