@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { fillSqlEditor, getSqlEditorValue } from './helpers/monacoEditor';
 
 async function expandDatabaseNode(page: Page, alias = 'main') {
   const dbLabel = page.locator(`.tree-label.db-node[data-db-alias="${alias}"]`);
@@ -40,7 +41,7 @@ test.describe('画面構成確認', () => {
 
   test('結果表示グリッドが表示される', async ({ page }) => {
     // まずクエリを実行してResultsタブを生成
-    await page.fill('#sql-editor', 'SELECT 1;');
+    await fillSqlEditor(page, 'SELECT 1;');
     await page.click('#run-button');
     
     await expect(page.locator('#results-grid').first()).toBeVisible();
@@ -99,21 +100,21 @@ test.describe('画面構成確認', () => {
   });
 
   test('タブ切り替えでクエリの内容が保存・復元されること', async ({ page }) => {
-    const initialQuery = await page.locator('#sql-editor').inputValue();
+    const initialQuery = await getSqlEditorValue(page);
     // 新規タブ追加し、編集
     await page.click('#new-query-button');
-    await page.locator('#sql-editor').fill('SELECT 1');
+    await fillSqlEditor(page, 'SELECT 1');
     // 戻る
     await page.locator('.query-tab').nth(0).click();
-    expect(await page.locator('#sql-editor').inputValue()).toBe(initialQuery);
+    expect(await getSqlEditorValue(page)).toBe(initialQuery);
     // 再度2番目タブ
     await page.locator('.query-tab').nth(1).click();
-    expect(await page.locator('#sql-editor').inputValue()).toBe('SELECT 1');
+    expect(await getSqlEditorValue(page)).toBe('SELECT 1');
   });
 
   test('タブ切替で Results と Messages の表示が切り替わること', async ({ page }) => {
     // まずクエリを実行してResultsタブを生成
-    await page.fill('#sql-editor', 'SELECT 1;');
+    await fillSqlEditor(page, 'SELECT 1;');
     await page.click('#run-button');
     // 初期は Results
     expect(await page.locator('#results-area').evaluate(el => window.getComputedStyle(el).display)).not.toBe('none');
@@ -131,11 +132,11 @@ test.describe('画面構成確認', () => {
     // 'test' テーブルをクリック
     await page.locator('.tree-label.Tables[data-name="test"]').click();
     // SQLエディタにクエリが設定される
-    await expect(page.locator('#sql-editor')).toHaveValue('SELECT * FROM test LIMIT 100');
+    expect(await getSqlEditorValue(page)).toBe('SELECT * FROM test LIMIT 100');
     // 実行ボタンをクリック
     await page.click('#run-button');
     // Resultsテーブルに少なくとも1行表示される
-    const rowCount = await page.locator('#results-table tbody tr').count();
+    const rowCount = await page.locator('#results-grid tbody tr').count();
     expect(rowCount).toBeGreaterThan(0);
   });
 
@@ -148,35 +149,34 @@ test.describe('画面構成確認', () => {
     // テーブル 'test' をクリック
     await page.locator('.tree-label.Tables[data-name="test"]').click();
     // SQLエディタにクエリが設定される
-    await expect(page.locator('#sql-editor')).toHaveValue('SELECT * FROM test LIMIT 100');
+    expect(await getSqlEditorValue(page)).toBe('SELECT * FROM test LIMIT 100');
     // 実行ボタンをクリック
     await page.click('#run-button');
     // 2番目タブでResultsグリッドに行が表示される
-    const rows = await page.locator('#results-table tbody tr').count();
+    const rows = await page.locator('#results-grid tbody tr').count();
     expect(rows).toBeGreaterThan(0);
   });
 
   test('Views, Indexes, Triggersがツリービューに表示される', async ({ page }) => {
     await page.click('#new-db-button');
-    const editor = page.locator('#sql-editor');
     // Viewを作成
-    await editor.fill("CREATE VIEW v_test AS SELECT * FROM test;");
+    await fillSqlEditor(page, "CREATE VIEW v_test AS SELECT * FROM test;");
     await page.waitForTimeout(1000);
     await page.click('#run-button');
     await expect(page.locator('.status-success')).toHaveText("クエリ1を実行しました: 0 行に影響", { timeout: 15000 });
     
     // Indexを作成
-    await editor.fill("CREATE INDEX idx_col2 ON test(col2);");
+    await fillSqlEditor(page, "CREATE INDEX idx_col2 ON test(col2);");
     await page.waitForTimeout(1000);
     await page.click('#run-button');
     await expect(page.locator('.status-success')).toHaveText("クエリ1を実行しました: 0 行に影響", { timeout: 15000 });
     // Triggerを作成
-    await editor.fill("CREATE TRIGGER trg_test AFTER INSERT ON test BEGIN SELECT RAISE(IGNORE); END;");
+    await fillSqlEditor(page, "CREATE TRIGGER trg_test AFTER INSERT ON test BEGIN SELECT RAISE(IGNORE); END;");
     await page.waitForTimeout(1000);
     await page.click('#run-button');
     await expect(page.locator('.status-success')).toHaveText("クエリ1を実行しました: 0 行に影響", { timeout: 15000 });
     // データベース変更をコミットしてからツリービューをリフレッシュ
-    await editor.fill("COMMIT;");
+    await fillSqlEditor(page, "COMMIT;");
     await page.click('#run-button');
     await page.click('#refresh-db-button');
     await expandDatabaseNode(page);
@@ -200,16 +200,16 @@ test.describe('画面構成確認', () => {
   test('新規DB作成後にtestテーブルが存在すること', async ({ page }) => {
     await page.goto('/');
     await page.click('#new-db-button');
-    await page.fill('#sql-editor', 'SELECT * FROM test;');
+    await fillSqlEditor(page, 'SELECT * FROM test;');
     await page.click('#run-button');
-    const rows = await page.locator('#results-table tbody tr').count();
+    const rows = await page.locator('#results-grid tbody tr').count();
     expect(rows).toBeGreaterThanOrEqual(2);
   });
 
   test('SELECT結果をデータセットDBに登録できる', async ({ page }) => {
     await page.goto('/');
     await page.click('#new-db-button');
-    await page.fill('#sql-editor', 'SELECT * FROM test LIMIT 100;');
+    await fillSqlEditor(page, 'SELECT * FROM test LIMIT 100;');
     await page.click('#run-button');
     await page.evaluate(() => {
       window.prompt = () => 'test_dataset';
@@ -218,7 +218,7 @@ test.describe('画面構成確認', () => {
 
     await expect(page.locator('#dataset-tree')).toContainText('test_dataset');
 
-    await page.fill('#sql-editor', 'SELECT COUNT(*) AS cnt FROM dataset.test_dataset;');
+    await fillSqlEditor(page, 'SELECT COUNT(*) AS cnt FROM dataset.test_dataset;');
     await page.click('#run-button');
     await expect(page.locator('#results-grid')).toContainText('2');
   });
@@ -233,12 +233,12 @@ test.describe('画面構成確認', () => {
   test('データセットは通常 SQL で参照できる', async ({ page }) => {
     await page.goto('/');
     await page.click('#new-db-button');
-    await page.fill('#sql-editor', 'SELECT * FROM test LIMIT 100;');
+    await fillSqlEditor(page, 'SELECT * FROM test LIMIT 100;');
     await page.click('#run-button');
     await page.evaluate(() => { window.prompt = () => 'test_dataset'; });
     await page.click('#register-dataset-btn');
 
-    await page.fill('#sql-editor', 'SELECT col1, col2 FROM dataset.test_dataset ORDER BY col1;');
+    await fillSqlEditor(page, 'SELECT col1, col2 FROM dataset.test_dataset ORDER BY col1;');
     await page.click('#run-button');
 
     await expect(page.locator('#results-grid')).toContainText('111');
@@ -258,7 +258,7 @@ test.describe('画面構成確認', () => {
     await expect(page.locator('#main-area')).toBeVisible();
     expect(await page.locator('.query-tab').count()).toBe(1);
     // SQLエディタが使えること
-    await page.locator('#sql-editor').fill('SELECT 1');
+    await fillSqlEditor(page, 'SELECT 1');
     await page.click('#run-button');
     // Resultsタブが生成されていること
     await expect(page.locator('.result-tab').first()).toBeVisible();
@@ -268,7 +268,7 @@ test.describe('画面構成確認', () => {
 
   test('Resultsタブが閉じられること', async ({ page }) => {
     // クエリを実行してResultsタブを生成
-    await page.fill('#sql-editor', 'SELECT 1;');
+    await fillSqlEditor(page, 'SELECT 1;');
     await page.click('#run-button');
     // Resultsタブが存在すること
     const resultsTab = page.locator('.result-tab', { hasText: /^Results/ });
@@ -282,7 +282,7 @@ test.describe('画面構成確認', () => {
 
   test('Resultsタブをすべて閉じた後に再度クエリ実行でResultsタブが追加される', async ({ page }) => {
     // クエリを実行してResultsタブを生成
-    await page.fill('#sql-editor', 'SELECT 1;');
+    await fillSqlEditor(page, 'SELECT 1;');
     await page.click('#run-button');
     // Resultsタブをすべて閉じる
     while (await page.locator('.result-tab', { hasText: /^Results/ }).count() > 0) {
@@ -292,7 +292,7 @@ test.describe('画面構成確認', () => {
     await expect(page.locator('.result-tab', { hasText: /^Results/ })).toHaveCount(0);
     await expect(page.locator('.result-tab', { hasText: 'Messages' })).toBeVisible();
     // 再度クエリ実行
-    await page.fill('#sql-editor', 'SELECT 2;');
+    await fillSqlEditor(page, 'SELECT 2;');
     await page.click('#run-button');
     // Resultsタブが再び追加されること
     await expect(page.locator('.result-tab', { hasText: /^Results/ })).toBeVisible();

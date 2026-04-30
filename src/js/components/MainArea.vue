@@ -1,5 +1,5 @@
 <template>
-  <div id="main-area" class="main-area">
+  <div id="main-area" class="main-area" v-show="queryTabs.length > 0">
     <!-- クエリタブ -->
     <div id="query-tabs" class="query-tabs">
       <div
@@ -14,25 +14,16 @@
       </div>
     </div>
 
-    <!-- クエリエリア（タブごと）: id は active タブのみに付与して重複を防ぐ -->
-    <div
-      v-for="tab in queryTabs"
-      :key="tab.id"
-      class="query-area"
-      :class="{ active: tab.id === activeQueryTabId }"
-      :id="`query-area-${tab.id}`"
-    >
-      <div
-        :id="tab.id === activeQueryTabId ? 'query-editor' : undefined"
-        class="query-editor"
-        :ref="el => trackQueryEditorRef(el, tab.id)"
-      >
-        <textarea
-          :id="tab.id === activeQueryTabId ? 'sql-editor' : undefined"
-          placeholder="SQLクエリを入力してください"
-          v-model="tab.query"
-        ></textarea>
-      </div>
+    <!-- クエリエリア（単一MonacoEditorをアクティブタブで共有） -->
+    <div id="query-editor" class="query-editor" ref="queryEditorEl">
+      <MonacoEditor
+        id="sql-editor"
+        :value="activeTabQuery"
+        @change="updateActiveTabQuery"
+        language="sql"
+        :options="monacoOptions"
+        style="width: 100%; height: 100%;"
+      />
     </div>
 
     <!-- 水平スプリッター -->
@@ -97,7 +88,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, computed } from 'vue';
+import MonacoEditor from 'monaco-editor-vue3';
 import DataTable from 'datatables.net-vue3';
 import DataTablesCore from 'datatables.net-dt';
 import 'datatables.net-dt/css/dataTables.dataTables.min.css';
@@ -124,6 +116,36 @@ interface QueryTab {
 const queryTabs = ref<QueryTab[]>([{ id: 'query1', label: 'Query1', query: '' }]);
 const activeQueryTabId = ref('query1');
 let queryTabSerial = 2;
+
+/** Monacoエディタの設定オプション */
+const monacoOptions = {
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  wordWrap: 'on' as const,
+  fontSize: 14,
+  lineNumbers: 'on' as const,
+  automaticLayout: true,
+};
+
+/**
+ * 処理名: アクティブタブのクエリ取得 (computed)
+ * 処理概要: 現在アクティブなタブの SQL 文字列を返す computed
+ * 実装理由: Monacoエディタの :value バインディングに使用するため
+ */
+const activeTabQuery = computed<string>(
+  () => queryTabs.value.find(t => t.id === activeQueryTabId.value)?.query ?? ''
+);
+
+/**
+ * 処理名: アクティブタブのクエリ更新
+ * 処理概要: Monacoエディタの内容変更時にアクティブタブの query を更新する
+ * 実装理由: Monacoの @change イベントハンドラとして使用するため
+ * @param value Monacoエディタの現在内容
+ */
+const updateActiveTabQuery = (value: string) => {
+  const tab = queryTabs.value.find(t => t.id === activeQueryTabId.value);
+  if (tab) tab.query = value;
+};
 
 /**
  * 処理名: クエリタブ切り替え
@@ -358,20 +380,8 @@ const getCurrentResultData = (): ResultData | null => {
 
 // ---- rowSplitter ----
 const rowSplitterEl = ref<HTMLElement | null>(null);
-/** タブIDごとにquery-editor要素を保持（rowSplitterへ渡す） */
-const queryEditorRefs = new Map<string, HTMLElement>();
-/**
- * 処理名: クエリエディタ ref 追跡
- * 処理概要: タブ ID ごとの query-editor 要素を Map に登録・削除する
- * 実装理由: rowSplitter がアクティブタブのエディタ要素を山断するため
- * @param el Vue が割り当てる要素（null の場合は削除）
- * @param tabId タブ ID
- */
-const trackQueryEditorRef = (el: unknown, tabId: string) => {
-  if (el instanceof HTMLElement) queryEditorRefs.set(tabId, el);
-  else queryEditorRefs.delete(tabId);
-};
-useRowSplitter(rowSplitterEl, () => queryEditorRefs.get(activeQueryTabId.value) ?? null);
+const queryEditorEl = ref<HTMLElement | null>(null);
+useRowSplitter(rowSplitterEl, () => queryEditorEl.value);
 
 defineExpose({
   addQueryTab,

@@ -646,6 +646,19 @@ useColumnSplitter(splitterEl, () => sidebarRef.value?.$el as HTMLElement | undef
 
 // ---- DB初期化 ----
 onMounted(async () => {
+    // SQLエディタのブリッジAPIをウィンドウに公開（テスト用）- DB初期化前に設定して即時利用可能にする
+    window.__sqlEditorBridge = {
+        /**
+         * アクティブタブの SQL 文字列を返す
+         * @returns アクティブタブの SQL 文字列
+         */
+        getValue: () => mainAreaRef.value?.getActiveQuery() ?? '',
+        /**
+         * アクティブタブに SQL 文字列をセットする
+         * @param v 設定する SQL 文字列
+         */
+        setValue: (v: string) => { mainAreaRef.value?.setActiveQuery(v); },
+    };
     const dbInitPromise = (window as { __dbInitPromise?: Promise<SQLiteManager> }).__dbInitPromise;
     if (dbInitPromise) {
         dbReady = dbInitPromise;

@@ -4,6 +4,15 @@ declare module '*.vue' {
   export default component
 }
 
+declare global {
+  interface Window {
+    __sqlEditorBridge: {
+      getValue: () => string;
+      setValue: (v: string) => void;
+    };
+  }
+}
+
 declare module '*.css' {
   const content: string
   export default content

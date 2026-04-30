@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
+import { fillSqlEditor, getSqlEditorValue } from '../../../helpers/monacoEditor';
 
 const csvFixture = path.resolve(__dirname, '../../../fixtures/dataset-upload.csv');
 
@@ -8,7 +9,7 @@ test.describe('dataset DB', () => {
     await page.goto('/');
 
     await page.click('#new-db-button');
-    await page.fill('#sql-editor', 'SELECT * FROM test LIMIT 100;');
+    await fillSqlEditor(page, 'SELECT * FROM test LIMIT 100;');
     await page.click('#run-button');
 
     await page.evaluate(() => {
@@ -20,7 +21,7 @@ test.describe('dataset DB', () => {
     await expect(page.locator('#db-tree')).not.toContainText(/^dataset$/);
 
     await page.locator('#dataset-tree .tree-label.dataset', { hasText: 'test_dataset' }).click();
-    await expect(page.locator('#sql-editor')).toHaveValue(/SELECT \* FROM dataset\.?"?test_dataset"? LIMIT 100/i);
+    expect(await getSqlEditorValue(page)).toMatch(/SELECT \* FROM dataset\.?"?test_dataset"? LIMIT 100/i);
     await expect(page.locator('.result-tab', { hasText: 'test_dataset' })).toHaveCount(0);
 
     await page.reload();
@@ -49,7 +50,7 @@ test.describe('dataset DB', () => {
     await page.goto('/');
 
     await page.click('#new-db-button');
-    await page.fill('#sql-editor', 'SELECT * FROM test LIMIT 100;');
+    await fillSqlEditor(page, 'SELECT * FROM test LIMIT 100;');
     await page.click('#run-button');
 
     await page.evaluate(() => {

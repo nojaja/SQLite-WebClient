@@ -11,6 +11,7 @@
  */
 import { test, expect, Page } from '@playwright/test';
 import path from 'path';
+import { fillSqlEditor, getSqlEditorValue } from '../../../helpers/monacoEditor';
 
 const SUB_DB_PATH = path.resolve(__dirname, '../../../fixtures/sub.db');
 const MAIN_DB_PATH = path.resolve(__dirname, '../../../fixtures/main.db');
@@ -72,7 +73,7 @@ test.describe('複数DB接続・横断クエリ (v1.3.0)', () => {
     await openDbFiles(page, [MAIN_DB_PATH, SUB_DB_PATH]);
 
     // クエリを入力して実行
-    await page.fill('#sql-editor', 'SELECT * FROM sub.orders;');
+    await fillSqlEditor(page, 'SELECT * FROM sub.orders;');
     await page.click('#run-button');
 
     // Results タブが表示されることを確認
@@ -139,7 +140,7 @@ test.describe('複数DB接続・横断クエリ (v1.3.0)', () => {
     // sub DB をアタッチ (2 ファイル選択: main + sub)
     // フィクスチャが 1 つのため、アタッチのみシナリオとして実装
     // まず main を開き、その後アタッチ操作は手動 SQL で行う
-    await page.fill('#sql-editor', `ATTACH DATABASE ':memory:' AS subtest`);
+    await fillSqlEditor(page, `ATTACH DATABASE ':memory:' AS subtest`);
     await page.click('#run-button');
     // ツリーを Refresh して subtest ノードを確認
     await page.click('#refresh-db-button');
@@ -161,7 +162,7 @@ test.describe('複数DB接続・横断クエリ (v1.3.0)', () => {
     const usersTableLabel = page.locator('#db-tree .tree-label.Tables[data-name="users"]').first();
     await usersTableLabel.click();
 
-    const editorValue = await page.locator('#sql-editor').inputValue();
+    const editorValue = await getSqlEditorValue(page);
     expect(editorValue).toContain('SELECT * FROM users LIMIT 100');
     expect(editorValue).not.toContain('main.');
   });
@@ -175,7 +176,7 @@ test.describe('複数DB接続・横断クエリ (v1.3.0)', () => {
     const ordersLabel = page.locator('#db-tree .tree-label.Tables[data-name="orders"][data-db-alias="sub"]').first();
     await ordersLabel.click();
 
-    const editorValue = await page.locator('#sql-editor').inputValue();
+    const editorValue = await getSqlEditorValue(page);
     expect(editorValue).toContain('SELECT * FROM sub.orders LIMIT 100');
   });
 });

@@ -6,6 +6,7 @@ const CopyPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const webpack = require('webpack');
 const { VueLoaderPlugin } = require('vue-loader');
+const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin');
 
 module.exports = {
   mode: process.env.NODE_ENV === 'production' ? 'development' : 'production',
@@ -102,6 +103,7 @@ module.exports = {
           }
         }
       ]
-    })
+    }),
+    new MonacoWebpackPlugin({ languages: ['sql'] })
   ]
 };
