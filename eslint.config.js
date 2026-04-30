@@ -16,8 +16,8 @@ const commonRules = {
       FunctionExpression: true,
     },
   }],
-  'jsdoc/require-param': 'warn',
-  'jsdoc/require-returns': 'warn',
+  'jsdoc/require-param': 'error',
+  'jsdoc/require-returns': 'error',
 };
 
 /** @type {import('eslint').Linter.FlatConfig[]} */
@@ -82,6 +82,7 @@ module.exports = [
     rules: {
       'vue/multi-word-component-names': 'warn',
       'sonarjs/cognitive-complexity': ['error', 10],
+      ...commonRules,
     },
   },
 ];

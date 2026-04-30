@@ -142,18 +142,43 @@ const dbSchemas = ref<Array<{
 const dbNodeOpen = reactive<Record<string, boolean>>({});
 const groupNodeOpen = reactive<Record<string, boolean>>({});
 
+/**
+ * 処理名: DBツリー開閉トグル
+ * 処理概要: Databases ツリーパネルの表示・非表示を切り替える
+ * 実装理由: パネルタイトルのクリックイベントに対応するため
+ */
 const onDbTreeTitleClick = () => { dbTreeOpen.value = !dbTreeOpen.value; };
 
+/**
+ * 処理名: DBツリードロップハンドラ
+ * 処理概要: .db ファイルがドロップされた際に親コンポーネントにファイル一覧を渡す
+ * 実装理由: DBツリーへのドラッグアンドドロップで複数DBを開くため
+ * @param e ドラッグイベント
+ */
 const onDbTreeDrop = (e: DragEvent) => {
   const dropped = Array.from(e.dataTransfer?.files ?? []).filter(f => /\.db$/i.test(f.name));
   if (dropped.length) emit('drop-files', dropped);
 };
 
+/**
+ * 処理名: DBノード開閉トグル
+ * 処理概要: 指定エイリアスの DB ノードの展開・折りたたみを切り替える
+ * 実装理由: ダブルクリックやメニューボタン操作と区別するため button クリックを除外する
+ * @param alias DB エイリアス
+ * @param e マウスイベント
+ */
 const toggleDbNode = (alias: string, e: MouseEvent) => {
   if ((e.target as HTMLElement).closest('button.menu-button')) return;
   dbNodeOpen[alias] = !dbNodeOpen[alias];
 };
 
+/**
+ * 処理名: グループノード開閉トグル
+ * 処理概要: 指定 DB エイリアス・グループ名のツリーグループ展開状態を切り替える
+ * 実装理由: Tables / Views / Indexes / Triggers 各グループを個別に開閉するため
+ * @param alias DB エイリアス
+ * @param title グループタイトル
+ */
 const toggleGroupNode = (alias: string, title: string) => {
   const key = `${alias}__${title}`;
   groupNodeOpen[key] = !groupNodeOpen[key];
@@ -163,21 +188,51 @@ const toggleGroupNode = (alias: string, title: string) => {
 const datasetTreeOpen = ref(true);
 const datasetTables = ref<string[]>([]);
 
+/**
+ * 処理名: データセットツリー開閉トグル
+ * 処理概要: データセットツリーパネルの表示・非表示を切り替える
+ * 実装理由: パネルタイトルのクリックイベントに対応するため
+ */
 const onDatasetTreeTitleClick = () => { datasetTreeOpen.value = !datasetTreeOpen.value; };
 
+/**
+ * 処理名: テーブルクリックハンドラ
+ * 処理概要: テーブルノードクリック時に SELECT * SQL を生成し親に渡す
+ * 実装理由: テーブル選択でクエリエディタに SQL を挙入するため
+ * @param name テーブル名
+ * @param alias DB エイリアス
+ */
 const onTableClick = (name: string, alias: string) => {
   emit('set-query', buildSelectAllQuery(alias, name));
 };
 
+/**
+ * 処理名: データセットクリックハンドラ
+ * 処理概要: データセットノードクリック時に dataset スキーマの SELECT SQL を生成する
+ * 実装理由: データセット選択時の SQL 生成を通常テーブルと共通化するため
+ * @param name データセットテーブル名
+ */
 const onDatasetClick = (name: string) => {
   emit('set-query', buildSelectAllQuery(DATASET_DB_ALIAS, name));
 };
 
 // ---- 外部から呼び出す API ----
+/**
+ * 処理名: DBツリー更新
+ * 処理概要: サイドバーに表示する DB スキーマ一覧を外部から更新する
+ * 実装理由: 親コンポーネントが DB 変更時にツリーを再描画するため
+ * @param schemas 更新する DB スキーマ配列
+ */
 const updateDatabaseTree = (schemas: typeof dbSchemas.value) => {
   dbSchemas.value = schemas ?? [];
 };
 
+/**
+ * 処理名: データセットツリー更新
+ * 処理概要: サイドバーに表示するデータセットテーブル名一覧を外部から更新する
+ * 実装理由: CSV登録・削除後にデータセット一覧を再描画するため
+ * @param tables 更新するテーブル名配列
+ */
 const updateDatasetTree = (tables: string[]) => {
   datasetTables.value = tables ?? [];
 };

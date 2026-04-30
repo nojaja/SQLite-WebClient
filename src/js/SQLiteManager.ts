@@ -386,7 +386,7 @@ class SQLiteManager {
    * @returns アタッチ済み DB 情報の配列
    */
   listAttachedDatabases() {
-const result = this.db.exec('PRAGMA database_list');
+    const result = this.db.exec('PRAGMA database_list');
     if (!result || !result[0]) return [];
     return result[0].values.map((vals: unknown[]) => ({
       seq: vals[0],

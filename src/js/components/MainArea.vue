@@ -125,10 +125,22 @@ const queryTabs = ref<QueryTab[]>([{ id: 'query1', label: 'Query1', query: '' }]
 const activeQueryTabId = ref('query1');
 let queryTabSerial = 2;
 
+/**
+ * 処理名: クエリタブ切り替え
+ * 処理概要: 指定 ID のクエリタブをアクティブにする
+ * 実装理由: タブクリック時にアクティブタブを切り替えるため
+ * @param id タブ ID
+ */
 const switchQueryTab = (id: string) => {
   activeQueryTabId.value = id;
 };
 
+/**
+ * 処理名: クエリタブ閉じる
+ * 処理概要: 指定 ID のクエリタブを削除し、必要に応じて隔隣タブにフォーカスを移す
+ * 実装理由: タブ閉じるボタン操作に対応するため
+ * @param id 閉じるタブ ID
+ */
 const closeQueryTab = (id: string) => {
   const idx = queryTabs.value.findIndex(t => t.id === id);
   if (idx === -1) return;
@@ -139,6 +151,12 @@ const closeQueryTab = (id: string) => {
   }
 };
 
+/**
+ * 処理名: クエリタブ追加
+ * 処理概要: 新規クエリタブをシリアル番号付きで追加しアクティブにする
+ * 実装理由: メニューの「New Query」ボタンからタブを追加するため
+ * @param label タブラベル（デフォルト: 'Query'）
+ */
 const addQueryTab = (label = 'Query') => {
   const id = `query${queryTabSerial++}`;
   const num = id.replace('query', '');
@@ -146,12 +164,22 @@ const addQueryTab = (label = 'Query') => {
   activeQueryTabId.value = id;
 };
 
-/** アクティブタブのクエリ文字列を取得 */
+/**
+ * 処理名: アクティブタブのクエリ取得
+ * 処理概要: 現在アクティブなクエリタブの SQL 文字列を返す
+ * 実装理由: 親コンポーネントのクエリ実行に使用するため
+ * @returns アクティブタブの SQL 文字列
+ */
 const getActiveQuery = (): string => {
   return queryTabs.value.find(t => t.id === activeQueryTabId.value)?.query ?? '';
 };
 
-/** アクティブタブのクエリを設定 */
+/**
+ * 処理名: アクティブタブのクエリ設定
+ * 処理概要: 現在アクティブなクエリタブの SQL 文字列を展開または書き換える
+ * 実装理由: SQLファイル読み込み時にエディタ内容を設定するため
+ * @param value 設定する SQL 文字列
+ */
 const setActiveQuery = (value: string) => {
   const tab = queryTabs.value.find(t => t.id === activeQueryTabId.value);
   if (tab) tab.query = value;
@@ -176,7 +204,21 @@ const dtOptions = {
 
 let dataTableRenderSerial = 0;
 
+/**
+ * 処理名: 結果データ存在確認
+ * 処理概要: 指定タブ ID に結果データが存在するか確認する
+ * 実装理由: DataTable 描画前にデータの有無を判定するため
+ * @param tableId 結果テーブル ID
+ * @returns データが存在する場合 true
+ */
 const hasResultGridData = (tableId: string): boolean => resultGridData.has(tableId);
+/**
+ * 処理名: 結果データ取得
+ * 処理概要: 指定タブ ID の結果データを返す
+ * 実装理由: DataTable コンポーネントにデータを渡すため
+ * @param tableId 結果テーブル ID
+ * @returns 結果データオブジェクトまたは undefined
+ */
 const getResultGridData = (tableId: string): ResultData | undefined => resultGridData.get(tableId);
 
 interface ResultTab {
@@ -194,6 +236,12 @@ const showResultsArea = ref(false);
 const showMessagesArea = ref(true);
 const showResultsMenuBar = ref(false);
 
+/**
+ * 処理名: 結果タブ切り替え
+ * 処理概要: 指定タブをアクティブにし、Messages/結果エリアの表示状態を切り替える
+ * 実装理由: タブクリック時に対応するエリアの表示切り替えを行うため
+ * @param id タブ ID
+ */
 const switchResultTab = (id: string) => {
   activeResultTabId.value = id;
   const tab = resultTabs.value.find(t => t.id === id);
@@ -209,6 +257,12 @@ const switchResultTab = (id: string) => {
   }
 };
 
+/**
+ * 処理名: 結果タブ削除
+ * 処理概要: 指定タブと結果データを削除し次のタブにフォーカスを移す
+ * 実装理由: タブの × ボタン操作に対応するため
+ * @param id 削除するタブ ID
+ */
 const removeResultTab = (id: string) => {
   const tab = resultTabs.value.find(t => t.id === id);
   if (!tab) return;
@@ -219,6 +273,13 @@ const removeResultTab = (id: string) => {
   switchResultTab(remaining.length > 0 ? remaining[0].id : 'messages-tab');
 };
 
+/**
+ * 処理名: 結果タブ追加
+ * 処理概要: 新規結果タブを Messages タブの手前に挿入しアクティブにする
+ * 実装理由: クエリ実行結果をタブで表示するため
+ * @param label タブの表示ラベル
+ * @param tableId 結果テーブル ID
+ */
 const addResultTab = (label: string, tableId: string) => {
   const id = `result-tab-${tableId}`;
   const msgTabIdx = resultTabs.value.findIndex(t => t.id === 'messages-tab');
@@ -231,6 +292,11 @@ const addResultTab = (label: string, tableId: string) => {
   switchResultTab(id);
 };
 
+/**
+ * 処理名: 結果タブ全クリア
+ * 処理概要: 閉じることができる結果タブとデータをすべて削除し初期状態に戻す
+ * 実装理由: 新規クエリ実行前に前回結果をクリアするため
+ */
 const clearResultTabs = () => {
   resultTabs.value.filter(t => t.closable).forEach(t => resultGridData.delete(t.resultsId));
   resultTabs.value = resultTabs.value.filter(t => t.id === 'messages-tab');
@@ -243,12 +309,26 @@ const clearResultTabs = () => {
 // ---- メッセージ ----
 const messages = ref<string[]>([]);
 
+/**
+ * 処理名: メッセージ設定
+ * 処理概要: Messages エリアに表示するメッセージを更新する
+ * 実装理由: クエリ実行結果やエラー内容をユーザーに表示するため
+ * @param msg 表示するメッセージ（文字列または配列）
+ */
 const setMessages = (msg: string | string[]) => {
   messages.value = Array.isArray(msg) ? msg : [msg];
 };
 
 // ---- 結果グリッドデータ管理 ----
-/** 指定タブに結果データをセット（DataTable コンポーネントが自動描画） */
+/**
+ * 処理名: 結果グリッドデータ設定
+ * 処理概要: 指定タブに結果データをセットし DataTable コンポーネントが自動描画する
+ * 実装理由: クエリ結果をテーブルで表示するため DataTable にデータを渡す必要がある
+ * @param tableId 結果テーブル ID
+ * @param data 結果データオブジェクト
+ * @param data.columns 列名配列
+ * @param data.results 行データ配列
+ */
 const setResultGridData = (tableId: string, data: { columns: string[]; results: Record<string, unknown>[] }) => {
   const columns = [...data.columns];
   const normalizedRows = data.results.map((row) => {
@@ -264,7 +344,12 @@ const setResultGridData = (tableId: string, data: { columns: string[]; results: 
   resultGridData.set(tableId, { columns, data: normalizedRows, renderKey: nextRenderKey });
 };
 
-/** アクティブな結果タブのデータを返す（CSVダウンロード・データセット登録に使用） */
+/**
+ * 処理名: アクティブ結果データ取得
+ * 処理概要: アクティブな結果タブのデータを返す（CSVダウンロード・データセット登録に使用）
+ * 実装理由: アクティブタブの結果を親コンポーネントに渡すため
+ * @returns 結果データまたはアクティブタブがない場合 null
+ */
 const getCurrentResultData = (): ResultData | null => {
   const activeTab = resultTabs.value.find(t => t.id === activeResultTabId.value && t.closable);
   if (!activeTab) return null;
@@ -275,6 +360,13 @@ const getCurrentResultData = (): ResultData | null => {
 const rowSplitterEl = ref<HTMLElement | null>(null);
 /** タブIDごとにquery-editor要素を保持（rowSplitterへ渡す） */
 const queryEditorRefs = new Map<string, HTMLElement>();
+/**
+ * 処理名: クエリエディタ ref 追跡
+ * 処理概要: タブ ID ごとの query-editor 要素を Map に登録・削除する
+ * 実装理由: rowSplitter がアクティブタブのエディタ要素を山断するため
+ * @param el Vue が割り当てる要素（null の場合は削除）
+ * @param tabId タブ ID
+ */
 const trackQueryEditorRef = (el: unknown, tabId: string) => {
   if (el instanceof HTMLElement) queryEditorRefs.set(tabId, el);
   else queryEditorRefs.delete(tabId);

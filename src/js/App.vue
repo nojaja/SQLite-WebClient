@@ -88,24 +88,62 @@ let currentDbPath = 'Untitled.db';
 let mainHidden = false;
 let queryExecutionSerial = 0;
 
+/**
+ * 処理名: DB インスタンス取得
+ * 処理概要: 初期化済みの SQLiteManager インスタンスを返す
+ * 実装理由: 未初期化時は reject し呼び出し元でエラーを捕捉できるようにするため
+ * @returns SQLiteManager の Promise
+ */
 const getDb = (): Promise<SQLiteManager> => {
     if (dbReady) return dbReady;
     return Promise.reject(new Error('DB未初期化'));
 };
 
 // ---- UIヘルパー ----
+/**
+ * 処理名: エラー表示
+ * 処理概要: ステータスバーにエラーメッセージを表示する
+ * 実装理由: アプリ全体のエラー通知を一元化するため
+ * @param msg エラーメッセージ
+ * @returns void
+ */
 const showError = (msg: string) => statusBarRef.value?.showError(msg);
+/**
+ * 処理名: 成功表示
+ * 処理概要: ステータスバーに成功メッセージを表示する
+ * 実装理由: アプリ全体の成功通知を一元化するため
+ * @param msg 成功メッセージ
+ * @returns void
+ */
 const showSuccess = (msg: string) => statusBarRef.value?.showSuccess(msg);
+/**
+ * 処理名: DB 名設定
+ * 処理概要: 現在の DB パスを更新しステータスバーに反映する
+ * 実装理由: DB 変更時にパスとステータス表示を同期するため
+ * @param name データベース名（パス）
+ */
 const setDbStatus = (name: string) => {
     currentDbPath = name;
     statusBarRef.value?.setDbName(name);
 };
 
+/**
+ * 処理名: 表示用スキーマ取得
+ * 処理概要: dataset DB と mainHidden フラグを除外したスキーマ一覧を返す
+ * 実装理由: サイドバーの DB ツリー表示に不要なスキーマを隠すため
+ * @param dbInst SQLiteManager インスタンス
+ * @returns 表示対象のスキーマ配列
+ */
 const getDisplaySchemas = (dbInst: SQLiteManager) => {
     const schemas = dbInst.getAllDatabaseSchemas().filter(s => s.alias !== DATASET_DB_ALIAS);
     return mainHidden ? schemas.filter(s => s.alias !== 'main') : schemas;
 };
 
+/**
+ * 処理名: ツリー再描画
+ * 処理概要: DB ツリーとデータセットツリーを最新状態で再描画する
+ * 実装理由: DB 変更後に常に同一手順でサイドバーを更新するため
+ */
 const refreshTrees = async () => {
     try {
         const dbInst = await getDb();
@@ -115,23 +153,54 @@ const refreshTrees = async () => {
 };
 
 // ---- ファイルI/Oヘルパー ----
+/**
+ * 処理名: ファイル ArrayBuffer 読み込み
+ * 処理概要: Blob を ArrayBuffer として非同期で読み込む
+ * 実装理由: SQLite ファイルをバイナリデータとして取得するため
+ * @param file 読み込む Blob
+ * @returns ArrayBuffer の Promise
+ */
 const readFileAsArrayBuffer = (file: Blob): Promise<ArrayBuffer> =>
     new Promise((resolve, reject) => {
         const reader = new FileReader();
+        /**
+         * 処理名: 読み込み完了ハンドラ
+         * 処理概要: ファイル読み込み完了時に ArrayBuffer を resolve に渡す
+         * 実装理由: FileReader の非同期完了を Promise に変換するため
+         * @returns void
+         */
         reader.onload = () => resolve(reader.result as ArrayBuffer);
         reader.onerror = reject;
         reader.readAsArrayBuffer(file);
     });
 
+/**
+ * 処理名: ファイルテキスト読み込み
+ * 処理概要: Blob をテキスト文字列として非同期で読み込む
+ * 実装理由: SQL ファイルをテキストとして取得するため
+ * @param file 読み込む Blob
+ * @returns テキスト文字列の Promise
+ */
 const readFileAsText = (file: Blob): Promise<string> =>
     new Promise((resolve, reject) => {
         const reader = new FileReader();
+        /**
+         * 処理名: 読み込み完了ハンドラ
+         * 処理概要: ファイル読み込み完了時にテキスト文字列を resolve に渡す
+         * 実装理由: FileReader の非同期完了を Promise に変換するため
+         * @returns void
+         */
         reader.onload = () => resolve((reader.result as string) ?? '');
         reader.onerror = reject;
         reader.readAsText(file);
     });
 
 let filePickerResolve: ((files: File[]) => void) | null = null;
+/**
+ * 処理名: ファイル入力変更ハンドラ
+ * 処理概要: 隠し入力要素の変更イベントを捕捉し resolve コールバックにファイル一覧を渡す
+ * 実装理由: ブラウザのファイル選択ダイアログを Promise 尖岡化するため
+ */
 const onFileInputChange = () => {
     if (filePickerResolve && fileInputRef.value) {
         filePickerResolve(Array.from(fileInputRef.value.files ?? []));
@@ -139,6 +208,14 @@ const onFileInputChange = () => {
     }
 };
 
+/**
+ * 処理名: ファイル選択
+ * 処理概要: 隠し入力要素を活性化しファイル選択ダイアログを表示する
+ * 実装理由: ファイル選択を Promise 尖岡化しイベント橋渡しを回避するため
+ * @param accept 指定ファイル種別（例: '.db'）
+ * @param multiple 複数選択を許可するか（デフォルト: false）
+ * @returns 選択した File 配列の Promise
+ */
 const pickFiles = (accept: string, multiple = false): Promise<File[]> =>
     new Promise(resolve => {
         const input = fileInputRef.value;
@@ -150,6 +227,14 @@ const pickFiles = (accept: string, multiple = false): Promise<File[]> =>
         input.click();
     });
 
+/**
+ * 処理名: BLOB 保存
+ * 処理概要: データを Blob に変換し隠しリンク経由でダウンロードする
+ * 実装理由: DB エクスポート・クエリ保存・ CSV 保存の共通ダウンロード処理を一元化するため
+ * @param filename 保存ファイル名
+ * @param data 保存データ
+ * @param mime MIME タイプ
+ */
 const saveBlob = (filename: string, data: unknown, mime: string) => {
     const a = downloadLinkRef.value;
     if (!a) return;
@@ -161,6 +246,14 @@ const saveBlob = (filename: string, data: unknown, mime: string) => {
     URL.revokeObjectURL(url);
 };
 
+/**
+ * 処理名: アタッチエイリアス生成
+ * 処理概要: ファイル名から重複しないエイリアス文字列を生成する
+ * 実装理由: 複数 DB をアタッチする際の名前衝突を防ぐため
+ * @param fileName 元にするファイル名
+ * @param dbInst 重複チェックに使用する SQLiteManager インスタンス（省略時は現在の db）
+ * @returns 重複しないエイリアス文字列
+ */
 const toAttachAlias = (fileName: string, dbInst?: SQLiteManager): string => {
     const inst = dbInst ?? db;
     const base = fileName.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_').replace(/^([0-9])/, '_$1') || 'attached_db';
@@ -173,6 +266,46 @@ const toAttachAlias = (fileName: string, dbInst?: SQLiteManager): string => {
 };
 
 // ---- クエリ実行 ----
+/** クエリ実行結果 1 件の型定義 */
+type QueryResultItem = { success: boolean; results?: Record<string, unknown>[]; columns?: string[]; error?: string; info?: { changes?: number } };
+
+/**
+ * 処理名: クエリ結果アイテム処理
+ * 処理概要: 1 件のクエリ実行結果を解析し結果タブまたはメッセージに反映する
+ * 実装理由: handleRunQuery の Cognitive Complexity を削減するため分離
+ * @param result クエリ実行結果オブジェクト
+ * @param idx 結果インデックス（0 始まり）
+ * @param total 全クエリ数
+ * @param executionId 実行シリアル ID
+ * @param messages メッセージ収集配列
+ * @returns 結果セットが存在する場合 true
+ */
+const processResultItem = (result: QueryResultItem, idx: number, total: number, executionId: number, messages: string[]): boolean => {
+    if (result.success && result.results?.length) {
+        const tableId = `results-table-${executionId}-${idx + 1}`;
+        const label = total === 1 ? 'Results' : `Results${idx + 1}`;
+        mainAreaRef.value?.addResultTab(label, tableId);
+        mainAreaRef.value?.setResultGridData(tableId, result as { columns: string[]; results: Record<string, unknown>[] });
+        messages.push(`クエリ${idx + 1}: ${result.results.length} 行の結果`);
+        return true;
+    }
+    if (result.success) {
+        const msg = `クエリ${idx + 1}を実行しました: ${result.info?.changes ?? 0} 行に影響`;
+        showSuccess(msg);
+        messages.push(msg);
+        return false;
+    }
+    const err = `クエリ${idx + 1}エラー: ${result.error}`;
+    showError(err);
+    messages.push(err);
+    return false;
+};
+
+/**
+ * 処理名: クエリ実行ハンドラ
+ * 処理概要: エディタのアクティブなクエリを実行し結果タブに表示する
+ * 実装理由: ユーザーの SQL 実行リクエストに対応するため
+ */
 const handleRunQuery = async () => {
     let dbInst: SQLiteManager;
     try { dbInst = await getDb(); } catch { showError('データベースが初期化されていません'); return; }
@@ -185,27 +318,13 @@ const handleRunQuery = async () => {
     await nextTick();
 
     try {
-        const results = dbInst.executeQuery(query) as Array<{ success: boolean; results?: Record<string, unknown>[]; columns?: string[]; error?: string; info?: { changes?: number } }>;
+        const results = dbInst.executeQuery(query) as QueryResultItem[];
         const messages: string[] = [];
         let anyResult = false;
 
         for (let idx = 0; idx < results.length; idx++) {
-            const result = results[idx];
-            if (result.success && result.results?.length) {
-                const tableId = `results-table-${executionId}-${idx + 1}`;
-                const label = results.length === 1 ? 'Results' : `Results${idx + 1}`;
-                mainAreaRef.value?.addResultTab(label, tableId);
-                mainAreaRef.value?.setResultGridData(tableId, result as { columns: string[]; results: Record<string, unknown>[] });
-                messages.push(`クエリ${idx + 1}: ${result.results.length} 行の結果`);
+            if (processResultItem(results[idx], idx, results.length, executionId, messages)) {
                 anyResult = true;
-            } else if (result.success) {
-                const msg = `クエリ${idx + 1}を実行しました: ${result.info?.changes ?? 0} 行に影響`;
-                showSuccess(msg);
-                messages.push(msg);
-            } else {
-                const err = `クエリ${idx + 1}エラー: ${result.error}`;
-                showError(err);
-                messages.push(err);
             }
         }
 
@@ -221,6 +340,11 @@ const handleRunQuery = async () => {
 };
 
 // ---- DB操作 ----
+/**
+ * 処理名: 新規 DB 作成ハンドラ
+ * 処理概要: サンプルデータ入りの新規インメモリ DB を作成する
+ * 実装理由: メニューの「New DB」操作に対応するため
+ */
 const handleNewDb = async () => {
     try {
         const dbInst = await getDb();
@@ -238,6 +362,43 @@ const handleNewDb = async () => {
     }
 };
 
+/**
+ * 処理名: DB ファイルアタッチ
+ * 処理概要: 1 つの DB ファイルを読み込みエイリアスを付けてアタッチする
+ * 実装理由: handleOpenDb と handleDbTreeDrop の共通処理を分離するため
+ * @param dbInst SQLiteManager インスタンス
+ * @param file アタッチする DB ファイル
+ */
+const attachFileToDb = async (dbInst: SQLiteManager, file: File): Promise<void> => {
+    const data = new Uint8Array(await readFileAsArrayBuffer(file));
+    const alias = toAttachAlias(file.name, dbInst);
+    try {
+        dbInst.attachDatabase(alias, data);
+        showSuccess(`'${file.name}' をエイリアス '${alias}' でアタッチしました`);
+    } catch (e) {
+        showError(`'${file.name}' のアタッチ失敗: ${(e as Error).message}`);
+    }
+};
+
+/**
+ * 処理名: 複数 DB ファイルのアタッチ
+ * 処理概要: 指定インデックス以降のファイルをすべて DB にアタッチする
+ * 実装理由: handleOpenDb と handleDbTreeDrop で共通利用するため分離
+ * @param dbInst SQLiteManager インスタンス
+ * @param files アタッチするファイル配列
+ * @param startIdx 開始インデックス（省略時 0）
+ */
+const attachAdditionalFiles = async (dbInst: SQLiteManager, files: File[], startIdx = 0): Promise<void> => {
+    for (let i = startIdx; i < files.length; i++) {
+        await attachFileToDb(dbInst, files[i]);
+    }
+};
+
+/**
+ * 処理名: DB ファイルを開く
+ * 処理概要: ファイル選択ダイアログで選択した DB ファイルを開くかアタッチする
+ * 実装理由: 既存 DB がある場合はアタッチ、ない場合はメインとして開く 2 つのモードに対応
+ */
 const handleOpenDb = async () => {
     try {
         const files = await pickFiles('.db', true);
@@ -245,16 +406,7 @@ const handleOpenDb = async () => {
         const dbInst = await getDb();
         const hasExisting = currentDbPath !== 'Untitled.db' || mainHidden;
         if (hasExisting) {
-            for (const file of files) {
-                const data = new Uint8Array(await readFileAsArrayBuffer(file));
-                const alias = toAttachAlias(file.name, dbInst);
-                try {
-                    dbInst.attachDatabase(alias, data);
-                    showSuccess(`'${file.name}' をエイリアス '${alias}' でアタッチしました`);
-                } catch (e) {
-                    showError(`'${file.name}' のアタッチ失敗: ${(e as Error).message}`);
-                }
-            }
+            await attachAdditionalFiles(dbInst, files, 0);
         } else {
             const first = files[0];
             const data = new Uint8Array(await readFileAsArrayBuffer(first));
@@ -263,17 +415,7 @@ const handleOpenDb = async () => {
             mainHidden = false;
             setDbStatus(first.name);
             showSuccess(`データベース '${first.name}' を開きました`);
-            for (let i = 1; i < files.length; i++) {
-                const file = files[i];
-                const d = new Uint8Array(await readFileAsArrayBuffer(file));
-                const alias = toAttachAlias(file.name, dbInst);
-                try {
-                    dbInst.attachDatabase(alias, d);
-                    showSuccess(`'${file.name}' をエイリアス '${alias}' でアタッチしました`);
-                } catch (e) {
-                    showError(`'${file.name}' のアタッチ失敗: ${(e as Error).message}`);
-                }
-            }
+            await attachAdditionalFiles(dbInst, files, 1);
         }
         refreshTrees();
     } catch (e) {
@@ -281,6 +423,11 @@ const handleOpenDb = async () => {
     }
 };
 
+/**
+ * 処理名: DB 保存ハンドラ
+ * 処理概要: 現在の DB をバイナリエクスポートしダウンロードする
+ * 実装理由: メニューの「Save DB」操作に対応するため
+ */
 const handleSaveDb = async () => {
     try {
         const dbInst = await getDb();
@@ -293,10 +440,20 @@ const handleSaveDb = async () => {
 };
 
 // ---- クエリファイル操作 ----
+/**
+ * 処理名: 新規クエリタブハンドラ
+ * 処理概要: 新規クエリタブを MainArea に追加する
+ * 実装理由: メニューの「New Query」操作に対応するため
+ */
 const handleNewQuery = () => {
     mainAreaRef.value?.addQueryTab('Query');
 };
 
+/**
+ * 処理名: SQL ファイルを開くハンドラ
+ * 処理概要: .sql ファイルを読み込んでエディタに設定する
+ * 実装理由: メニューの「Open Query」操作に対応するため
+ */
 const handleOpenQuery = async () => {
     try {
         const files = await pickFiles('.sql');
@@ -309,6 +466,11 @@ const handleOpenQuery = async () => {
     }
 };
 
+/**
+ * 処理名: クエリ保存ハンドラ
+ * 処理概要: 現在のクエリを .sql ファイルとしてダウンロードする
+ * 実装理由: メニューの「Save Query」操作に対応するため
+ */
 const handleSaveQuery = () => {
     const query = mainAreaRef.value?.getActiveQuery() ?? '';
     if (!query.trim()) { showError('保存するSQLクエリがありません'); return; }
@@ -317,10 +479,21 @@ const handleSaveQuery = () => {
 };
 
 // ---- Sidebar イベント ----
+/**
+ * 処理名: DB ツリーリフレッシュハンドラ
+ * 処理概要: サイドバーの DB ツリーとデータセットツリーを再描画する
+ * 実装理由: リフレッシュボタン操作に対応するため
+ */
 const handleRefreshDb = () => {
     refreshTrees();
 };
 
+/**
+ * 処理名: DB デタッチハンドラ
+ * 処理概要: 指定エイリアスの DB をデタッチする（main の場合は陰蔽）
+ * 実装理由: サイドバーのデタッチボタン操作に対応するため
+ * @param alias デタッチする DB エイリアス
+ */
 const handleDetachDb = async (alias: string) => {
     try {
         const dbInst = await getDb();
@@ -339,6 +512,11 @@ const handleDetachDb = async (alias: string) => {
     }
 };
 
+/**
+ * 処理名: CSV データセット追加ハンドラ
+ * 処理概要: CSV ファイルを選択し dataset DB にインポートする
+ * 実装理由: サイドバーの「データセット追加」ボタン操作に対応するため
+ */
 const handleAddDataset = async () => {
     const [file] = await pickFiles('.csv,text/csv');
     if (!file) return;
@@ -353,6 +531,12 @@ const handleAddDataset = async () => {
     }
 };
 
+/**
+ * 処理名: データセット削除ハンドラ
+ * 処理概要: 指定名のデータセットテーブルを dataset DB から削除する
+ * 実装理由: サイドバーのデータセット削除ボタン操作に対応するため
+ * @param name 削除するデータセット名
+ */
 const handleDeleteDataset = async (name: string) => {
     try {
         const dbInst = await getDb();
@@ -364,6 +548,12 @@ const handleDeleteDataset = async (name: string) => {
     }
 };
 
+/**
+ * 処理名: DBツリードロップハンドラ
+ * 処理概要: DBツリーにドラッグアンドドロップされたファイルを開く
+ * 実装理由: DBツリーへのドラッグ操作に対応するため
+ * @param dropped ドロップされたファイル配列
+ */
 const handleDbTreeDrop = async (dropped: File[]) => {
     try {
         const dbInst = await getDb();
@@ -374,24 +564,29 @@ const handleDbTreeDrop = async (dropped: File[]) => {
         mainHidden = false;
         setDbStatus(first.name);
         showSuccess(`データベース '${first.name}' を開きました`);
-        for (let i = 1; i < dropped.length; i++) {
-            const file = dropped[i];
-            const d = new Uint8Array(await readFileAsArrayBuffer(file));
-            const alias = toAttachAlias(file.name, dbInst);
-            try { dbInst.attachDatabase(alias, d); showSuccess(`'${file.name}' をアタッチしました`); }
-            catch (ae) { showError(`アタッチ失敗: ${(ae as Error).message}`); }
-        }
+        await attachAdditionalFiles(dbInst, dropped, 1);
         refreshTrees();
     } catch (err) {
         showError(`インポートエラー: ${(err as Error).message}`);
     }
 };
 
+/**
+ * 処理名: クエリ設定ハンドラ
+ * 処理概要: サイドバーから渡された SQL をエディタにセットする
+ * 実装理由: テーブルクリック時にクエリをエディタに挿入するため
+ * @param query 設定する SQL 文字列
+ */
 const handleSetQuery = (query: string) => {
     mainAreaRef.value?.setActiveQuery(query);
 };
 
 // ---- MainArea イベント ----
+/**
+ * 処理名: データセット登録ハンドラ
+ * 処理概要: アクティブな結果セットをデータセットとして dataset DB に登録する
+ * 実装理由: 結果エリアの「Register as Dataset」ボタン操作に対応するため
+ */
 const handleRegisterDataset = async () => {
     let dbInst: SQLiteManager;
     try { dbInst = await getDb(); } catch { return; }
@@ -408,6 +603,11 @@ const handleRegisterDataset = async () => {
     }
 };
 
+/**
+ * 処理名: CSV ダウンロードハンドラ
+ * 処理概要: アクティブな結果データを CSV 形式でダウンロードする
+ * 実装理由: 結果エリアの「Download CSV」ボタン操作に対応するため
+ */
 const handleDownloadCsv = () => {
     const data = mainAreaRef.value?.getCurrentResultData();
     if (!data) { showError('ダウンロードするデータがありません'); return; }
