@@ -26,6 +26,7 @@
                 ref="mainAreaRef"
                 @register-dataset="handleRegisterDataset"
                 @download-csv="handleDownloadCsv"
+                @run-query="handleRunQuery"
             />
         </div>
         <StatusBar ref="statusBarRef" />

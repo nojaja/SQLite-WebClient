@@ -20,6 +20,7 @@
         id="sql-editor"
         :value="activeTabQuery"
         @change="updateActiveTabQuery"
+        @editorDidMount="onEditorMounted"
         language="sql"
         :options="monacoOptions"
         style="width: 100%; height: 100%;"
@@ -90,6 +91,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed } from 'vue';
 import MonacoEditor from 'monaco-editor-vue3';
+import * as monaco from 'monaco-editor';
 import DataTable from 'datatables.net-vue3';
 import DataTablesCore from 'datatables.net-dt';
 import 'datatables.net-dt/css/dataTables.dataTables.min.css';
@@ -99,9 +101,10 @@ import { useRowSplitter } from '../composables/useRowSplitter';
 
 DataTable.use(DataTablesCore);
 
-defineEmits<{
+const emit = defineEmits<{
   'register-dataset': [];
   'download-csv': [];
+  'run-query': [];
 }>();
 
 defineOptions({ name: 'AppMainArea' });
@@ -376,6 +379,21 @@ const getCurrentResultData = (): ResultData | null => {
   const activeTab = resultTabs.value.find(t => t.id === activeResultTabId.value && t.closable);
   if (!activeTab) return null;
   return resultGridData.get(activeTab.resultsId) ?? null;
+};
+
+/**
+ * 処理名: Monacoエディタマウント時ハンドラ
+ * 処理概要: Ctrl+Enter ショートカットでクエリ実行イベントを発火する
+ * 実装理由: query-editor フォーカス中にキーボードからクエリを実行できるようにするため
+ * @param editor Monacoエディタインスタンス
+ */
+const onEditorMounted = (editor: monaco.editor.IStandaloneCodeEditor) => {
+  editor.addAction({
+    id: 'run-query-shortcut',
+    label: 'Run Query',
+    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
+    run: () => { emit('run-query'); },
+  });
 };
 
 // ---- rowSplitter ----
