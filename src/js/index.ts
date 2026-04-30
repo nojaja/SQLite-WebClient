@@ -2,7 +2,10 @@ import SQLiteManager from './SQLiteManager';
 import { createApp } from 'vue';
 import App from './App.vue';
 import '../css/app.scss';
+import { registerSqlCompletionProvider } from './sqlCompletionProvider';
 // DataTables CSS は Results.ts でインポート済み
+
+registerSqlCompletionProvider();
 
 
 // SQLiteManager初期化をVueマウントと並行して早期に開始する（テストのタイミング問題を回避）
