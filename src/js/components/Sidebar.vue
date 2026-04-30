@@ -1,5 +1,5 @@
 <template>
-  <div id="sidebar" class="sidebar">
+  <div id="sidebar" class="sidebar" @click.capture="closeDbObjectContextMenu">
     <!-- Databasesツリー -->
     <div class="tree-block databases-tree-block">
       <div class="tree-title" style="cursor:pointer" @click="onDbTreeTitleClick">
@@ -62,6 +62,7 @@
                       :class="group.title"
                       :data-name="name"
                       :data-db-alias="schema.alias"
+                      @contextmenu.prevent="onDbObjectContextMenu($event, schema.alias, group.title, name)"
                       @click="onTableClick(name, schema.alias)"
                     >
                       <span class="material-symbols-outlined icon">{{ group.icon }}</span>
@@ -112,11 +113,26 @@
         </div>
       </div>
     </div>
+
+    <div
+      v-if="dbObjectContextMenu.visible"
+      id="db-object-context-menu"
+      class="context-menu"
+      :style="{ left: `${dbObjectContextMenu.x}px`, top: `${dbObjectContextMenu.y}px` }"
+    >
+      <button
+        id="db-object-show-ddl-menu"
+        class="context-menu-item"
+        @click.stop="onShowDdlMenuClick"
+      >
+        DDLを表示
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, onMounted, onBeforeUnmount } from 'vue';
 import { buildSelectAllQuery, DATASET_DB_ALIAS } from '../datasetDb';
 
 defineOptions({ name: 'AppSidebar' });
@@ -128,7 +144,10 @@ const emit = defineEmits<{
   'delete-dataset': [name: string];
   'drop-files': [files: File[]];
   'set-query': [query: string];
+  'show-ddl': [payload: { alias: string; name: string; objectType: DbObjectType }];
 }>();
+
+type DbObjectType = 'table' | 'view' | 'index' | 'trigger';
 
 // ---- Databases ツリー ----
 const dbTreeOpen = ref(true);
@@ -141,6 +160,28 @@ const dbSchemas = ref<Array<{
 }>>([]);
 const dbNodeOpen = reactive<Record<string, boolean>>({});
 const groupNodeOpen = reactive<Record<string, boolean>>({});
+const dbObjectContextMenu = reactive<{
+  visible: boolean;
+  x: number;
+  y: number;
+  alias: string;
+  name: string;
+  objectType: DbObjectType;
+}>({
+  visible: false,
+  x: 0,
+  y: 0,
+  alias: '',
+  name: '',
+  objectType: 'table'
+});
+
+const groupTitleToObjectType: Record<string, DbObjectType> = {
+  Tables: 'table',
+  Views: 'view',
+  Indexes: 'index',
+  Triggers: 'trigger'
+};
 
 /**
  * 処理名: DBツリー開閉トグル
@@ -182,6 +223,61 @@ const toggleDbNode = (alias: string, e: MouseEvent) => {
 const toggleGroupNode = (alias: string, title: string) => {
   const key = `${alias}__${title}`;
   groupNodeOpen[key] = !groupNodeOpen[key];
+};
+
+/**
+ * 処理名: DBオブジェクト右クリックメニュー表示
+ * 処理概要: Tables / Views / Indexes / Triggers の項目右クリックでメニューを開く
+ * 実装理由: DDL表示アクションをコンテキストメニュー経由で提供するため
+ * @param e マウスイベント
+ * @param alias DBエイリアス
+ * @param groupTitle グループ名
+ * @param name DBオブジェクト名
+ */
+const onDbObjectContextMenu = (e: MouseEvent, alias: string, groupTitle: string, name: string) => {
+  const objectType = groupTitleToObjectType[groupTitle];
+  if (!objectType) return;
+  dbObjectContextMenu.visible = true;
+  dbObjectContextMenu.x = e.clientX;
+  dbObjectContextMenu.y = e.clientY;
+  dbObjectContextMenu.alias = alias;
+  dbObjectContextMenu.name = name;
+  dbObjectContextMenu.objectType = objectType;
+};
+
+/**
+ * 処理名: DBオブジェクト右クリックメニュー閉じる
+ * 処理概要: 表示中のコンテキストメニューを閉じる
+ * 実装理由: メニュー外クリックや ESC 操作でメニューを閉じるため
+ */
+const closeDbObjectContextMenu = () => {
+  dbObjectContextMenu.visible = false;
+};
+
+/**
+ * 処理名: DDL表示メニュー選択
+ * 処理概要: コンテキストメニューの DDL 表示を選択した際に親へ通知する
+ * 実装理由: DDL 取得と表示を親コンポーネントに委譲するため
+ */
+const onShowDdlMenuClick = () => {
+  emit('show-ddl', {
+    alias: dbObjectContextMenu.alias,
+    name: dbObjectContextMenu.name,
+    objectType: dbObjectContextMenu.objectType
+  });
+  closeDbObjectContextMenu();
+};
+
+/**
+ * 処理名: キー押下ハンドラ
+ * 処理概要: Escape 押下時にコンテキストメニューを閉じる
+ * 実装理由: キーボード操作でもメニューを閉じられるようにするため
+ * @param e キーボードイベント
+ */
+const onWindowKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Escape') {
+    closeDbObjectContextMenu();
+  }
 };
 
 // ---- データセットツリー ----
@@ -236,6 +332,14 @@ const updateDatabaseTree = (schemas: typeof dbSchemas.value) => {
 const updateDatasetTree = (tables: string[]) => {
   datasetTables.value = tables ?? [];
 };
+
+onMounted(() => {
+  window.addEventListener('keydown', onWindowKeydown);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onWindowKeydown);
+});
 
 defineExpose({ updateDatabaseTree, updateDatasetTree });
 </script>

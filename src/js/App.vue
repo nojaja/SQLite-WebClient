@@ -19,6 +19,7 @@
                 @delete-dataset="handleDeleteDataset"
                 @drop-files="handleDbTreeDrop"
                 @set-query="handleSetQuery"
+                @show-ddl="handleShowDdl"
             />
             <div class="splitter" ref="splitterEl"></div>
             <MainArea
@@ -579,6 +580,27 @@ const handleDbTreeDrop = async (dropped: File[]) => {
  */
 const handleSetQuery = (query: string) => {
     mainAreaRef.value?.setActiveQuery(query);
+};
+
+/**
+ * 処理名: DDL表示ハンドラ
+ * 処理概要: サイドバー右クリックメニューで選択された DB オブジェクトの DDL をエディタに設定する
+ * 実装理由: テーブル/ビュー/インデックス/トリガー定義を素早く確認できるようにするため
+ * @param payload DDL 表示対象情報
+ * @param payload.alias 対象オブジェクトの DB エイリアス
+ * @param payload.name 対象オブジェクト名
+ * @param payload.objectType 対象オブジェクト種別
+ */
+const handleShowDdl = async (payload: { alias: string; name: string; objectType: 'table' | 'view' | 'index' | 'trigger' }) => {
+    try {
+        const dbInst = await getDb();
+        const ddl = dbInst.getSchemaObjectDdl(payload.alias, payload.objectType, payload.name);
+        const normalizedDdl = ddl.trim().endsWith(';') ? ddl.trim() : `${ddl.trim()};`;
+        mainAreaRef.value?.setActiveQuery(normalizedDdl);
+        showSuccess(`DDLを表示しました: ${payload.alias}.${payload.name}`);
+    } catch (e) {
+        showError(`DDL表示失敗: ${(e as Error).message}`);
+    }
 };
 
 // ---- MainArea イベント ----

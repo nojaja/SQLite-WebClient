@@ -354,6 +354,24 @@ class SQLiteManager {
   }
 
   /**
+   * SQL 識別子をダブルクォートで安全に囲む
+   * @param identifier 識別子
+   * @returns エスケープ済み識別子
+   */
+  private static quoteIdentifier(identifier: string): string {
+    return `"${identifier.replace(/"/g, '""')}"`;
+  }
+
+  /**
+   * SQL 文字列リテラルをシングルクォートで安全に囲む
+   * @param value 文字列値
+   * @returns エスケープ済み SQL リテラル
+   */
+  private static quoteLiteral(value: string): string {
+    return `'${value.replace(/'/g, "''")}'`;
+  }
+
+  /**
    * 追加 DB をアタッチする
    * @param {string} alias - スキーマ名（英数字・アンダースコアのみ）
    * @param {Uint8Array|null} data - DB バイナリデータ（null の場合は空 DB を作成）
@@ -462,6 +480,33 @@ class SQLiteManager {
   getAllDatabaseSchemas() {
     const dbs = this.listAttachedDatabases().filter((d: Record<string, unknown>) => d.name !== 'temp');
     return dbs.map((d: Record<string, unknown>) => this.getDatabaseSchema(d.name as string));
+  }
+
+  /**
+   * 指定オブジェクトの DDL(SQL) を取得する
+   * @param schemaName スキーマ名
+   * @param objectType オブジェクト種別
+   * @param objectName オブジェクト名
+   * @returns CREATE 文の SQL 文字列
+   */
+  getSchemaObjectDdl(schemaName: string, objectType: 'table' | 'view' | 'index' | 'trigger', objectName: string): string {
+    SQLiteManager._validateAlias(schemaName);
+    const allowedTypes = ['table', 'view', 'index', 'trigger'];
+    if (!allowedTypes.includes(objectType)) {
+      throw new Error(`未対応のオブジェクト種別です: ${objectType}`);
+    }
+
+    const schemaIdentifier = SQLiteManager.quoteIdentifier(schemaName);
+    const typeLiteral = SQLiteManager.quoteLiteral(objectType);
+    const nameLiteral = SQLiteManager.quoteLiteral(objectName);
+    const sql = `SELECT sql FROM ${schemaIdentifier}.sqlite_master WHERE type = ${typeLiteral} AND name = ${nameLiteral} LIMIT 1`;
+
+    const [rows] = this.db.exec(sql);
+    const ddl = rows?.values?.[0]?.[0];
+    if (typeof ddl === 'string' && ddl.trim()) {
+      return ddl;
+    }
+    throw new Error(`DDLが見つかりません: ${schemaName}.${objectName}`);
   }
 
   /**
