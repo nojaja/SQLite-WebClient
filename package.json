@@ -1,6 +1,6 @@
 {
   "name": "SQLite-WebClient",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "SQLite WASM implementation WebClient",
   "main": "src/js/index.js",
   "scripts": {
