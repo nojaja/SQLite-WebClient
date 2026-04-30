@@ -34,20 +34,7 @@ export const buildSelectAllQuery = (schemaName, tableName, limit = 100) => {
 };
 
 /**
- *
- * @param editor
- * @param tableName
- * @param schemaName
- * @returns void
- */
-export const setEditorQueryForTable = (editor, tableName, schemaName = 'main') => {
-  if (!editor) return;
-  editor.value = buildSelectAllQuery(schemaName, tableName);
-  editor.focus();
-};
-
 /**
- *
  * @param bytes
  * @returns Base64 エンコード文字列
  */
@@ -61,7 +48,6 @@ const uint8ArrayToBase64 = (bytes) => {
 };
 
 /**
- *
  * @param base64
  * @returns バイナリデータ
  */
@@ -75,7 +61,6 @@ const base64ToUint8Array = (base64) => {
 };
 
 /**
- *
  * @returns 保存済みデータまたは null
  */
 const loadPersistedDataset = () => {
