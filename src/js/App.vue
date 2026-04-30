@@ -402,7 +402,7 @@ const attachAdditionalFiles = async (dbInst: SQLiteManager, files: File[], start
  */
 const handleOpenDb = async () => {
     try {
-        const files = await pickFiles('.db', true);
+        const files = await pickFiles('.db,.sqlite,.sqlite3,.db3', true);
         if (!files.length) return;
         const dbInst = await getDb();
         const hasExisting = currentDbPath !== 'Untitled.db' || mainHidden;
