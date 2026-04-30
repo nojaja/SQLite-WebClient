@@ -24,6 +24,9 @@
       <button id="run-button" class="menu-button" @click="$emit('run-query')">
         <span class="material-symbols-outlined">play_arrow</span> Run
       </button>
+      <button id="show-plan-button" class="menu-button" @click="$emit('show-query-plan')">
+        <span class="material-symbols-outlined">account_tree</span> Query Plan
+      </button>
     </div>
     <div class="menu-group" id="help-group">
       <button id="help-button" class="menu-button" @click="$emit('open-help')">
@@ -42,6 +45,7 @@ defineEmits<{
   'open-query': [];
   'save-query': [];
   'run-query': [];
+  'show-query-plan': [];
   'open-help': [];
 }>();
 </script>

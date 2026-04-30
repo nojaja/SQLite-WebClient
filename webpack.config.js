@@ -93,6 +93,9 @@ module.exports = {
       jQuery: 'jquery',
       Buffer: ['buffer', 'Buffer']
     }),
+    new webpack.DefinePlugin({
+      __APP_VERSION__: version
+    }),
     new CopyPlugin({
       patterns: [
         {

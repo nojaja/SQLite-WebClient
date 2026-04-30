@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sqlite-webclient-v1';
+const CACHE_NAME = 'sqlite-webclient-v2';
 const APP_SHELL = ['/', '/index.html', '/main.bundle.js', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
@@ -24,6 +24,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  const requestUrl = new URL(event.request.url);
+  if (requestUrl.protocol !== 'http:' && requestUrl.protocol !== 'https:') {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) {
@@ -31,8 +36,15 @@ self.addEventListener('fetch', (event) => {
       }
 
       return fetch(event.request).then((response) => {
+        if (!response || response.status !== 200) {
+          return response;
+        }
+
         const cloned = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
+        caches
+          .open(CACHE_NAME)
+          .then((cache) => cache.put(event.request, cloned))
+          .catch(() => undefined);
         return response;
       });
     })

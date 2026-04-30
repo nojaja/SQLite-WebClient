@@ -9,6 +9,7 @@
             @open-query="handleOpenQuery"
             @save-query="handleSaveQuery"
             @run-query="handleRunQuery"
+            @show-query-plan="handleShowQueryPlan"
         />
         <div class="main-layout">
             <Sidebar
@@ -344,6 +345,45 @@ const handleRunQuery = async () => {
         }
     } catch (error) {
         const msg = `クエリ実行中にエラーが発生しました: ${(error as Error).message}`;
+        showError(msg);
+        mainAreaRef.value?.setMessages(msg);
+    }
+};
+
+/**
+ * 処理名: クエリ実行計画表示ハンドラ
+ * 処理概要: エディタのアクティブなクエリの実行計画を取得し結果タブに表示する
+ * 実装理由: ユーザーの SQL 実行計画確認リクエストに対応するため
+ */
+const handleShowQueryPlan = async () => {
+    let dbInst: SQLiteManager;
+    try { dbInst = await getDb(); } catch { showError('データベースが初期化されていません'); return; }
+    const query = mainAreaRef.value?.getActiveQuery()?.trim();
+    if (!query) { showError('実行計画を表示するクエリを入力してください'); return; }
+
+    queryExecutionSerial += 1;
+    const executionId = queryExecutionSerial;
+    mainAreaRef.value?.clearResultTabs();
+    await nextTick();
+
+    try {
+        const planQuery = `EXPLAIN QUERY PLAN\n${query}`;
+        const results = dbInst.executeQuery(planQuery) as QueryResultItem[];
+        const messages: string[] = [];
+        let anyResult = false;
+
+        for (let idx = 0; idx < results.length; idx++) {
+            if (processResultItem(results[idx], idx, results.length, executionId, messages)) {
+                anyResult = true;
+            }
+        }
+
+        mainAreaRef.value?.setMessages(messages);
+        if (!anyResult) {
+            mainAreaRef.value?.switchResultTab('messages-tab');
+        }
+    } catch (error) {
+        const msg = `実行計画取得中にエラーが発生しました: ${(error as Error).message}`;
         showError(msg);
         mainAreaRef.value?.setMessages(msg);
     }

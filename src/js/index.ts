@@ -5,6 +5,8 @@ import '../css/app.scss';
 import { registerSqlCompletionProvider } from './sqlCompletionProvider';
 // DataTables CSS は Results.ts でインポート済み
 
+declare const __APP_VERSION__: string;
+
 registerSqlCompletionProvider();
 
 /**
@@ -21,7 +23,11 @@ registerSqlCompletionProvider();
  * @returns {void}
  */
 function registerServiceWorker(): void {
-	void navigator.serviceWorker.register('/service-worker.js');
+	const serviceWorkerUrl = `/service-worker.js?v=${encodeURIComponent(__APP_VERSION__)}`;
+	void navigator.serviceWorker
+		.register(serviceWorkerUrl, { updateViaCache: 'none' })
+		.then((registration) => registration.update())
+		.catch(() => undefined);
 }
 
 if ('serviceWorker' in navigator) {
