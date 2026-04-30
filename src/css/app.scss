@@ -98,8 +98,9 @@ body {
 }
 
 .databases-tree-block {
-  flex: 0 1 auto;
-  max-height: 50%;
+  flex: 0 0 40%;
+  min-height: 220px;
+  max-height: 60%;
 }
 
 .dataset-tree-block {
@@ -109,6 +110,10 @@ body {
 .databases-tree-block .tree-view,
 .dataset-tree-block .tree-view {
   min-height: 0;
+}
+
+.databases-tree-block .tree-view {
+  min-height: 160px;
 }
 
 .tree-title {
@@ -126,6 +131,82 @@ body {
   flex: 1;
   overflow: auto;
   padding: 5px;
+}
+
+#db-tree,
+#dataset-tree {
+  position: relative;
+  transition: background-color 120ms ease, outline-color 120ms ease;
+
+  &.drop-target-active {
+    background-color: rgba(0, 120, 215, 0.08);
+    outline: 2px dashed rgba(0, 120, 215, 0.7);
+    outline-offset: -2px;
+  }
+
+  &.drop-target-invalid {
+    background-color: rgba(216, 59, 1, 0.08);
+    outline-color: rgba(216, 59, 1, 0.7);
+  }
+}
+
+#query-editor {
+  position: relative;
+  transition: background-color 120ms ease, outline-color 120ms ease;
+
+  &.drop-target-active {
+    background-color: rgba(0, 120, 215, 0.06);
+    outline: 2px dashed rgba(0, 120, 215, 0.7);
+    outline-offset: -2px;
+  }
+
+  &.drop-target-invalid {
+    background-color: rgba(216, 59, 1, 0.06);
+    outline-color: rgba(216, 59, 1, 0.7);
+  }
+}
+
+.db-drop-indicator,
+.dataset-drop-indicator {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 2px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0b4f86;
+  background-color: rgba(0, 120, 215, 0.14);
+  border: 1px solid rgba(0, 120, 215, 0.3);
+
+  &.invalid {
+    color: #7a2c12;
+    background-color: rgba(216, 59, 1, 0.15);
+    border-color: rgba(216, 59, 1, 0.32);
+  }
+}
+
+.query-drop-indicator {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  color: #fff;
+  background-color: rgba(0, 120, 215, 0.88);
+  border: 1px solid rgba(0, 120, 215, 0.5);
+
+  &.invalid {
+    background-color: rgba(216, 59, 1, 0.88);
+    border-color: rgba(216, 59, 1, 0.5);
+  }
 }
 
 .tree-item {

@@ -11,6 +11,7 @@
  */
 import { test, expect, Page } from '@playwright/test';
 import path from 'path';
+import fs from 'fs/promises';
 import { fillSqlEditor, getSqlEditorValue } from '../../../helpers/monacoEditor';
 
 const SUB_DB_PATH = path.resolve(__dirname, '../../../fixtures/sub.db');
@@ -28,6 +29,45 @@ async function openDbFiles(page: Page, filePaths: string[]) {
     page.click('#open-db-button'),
   ]);
   await fileChooser.setFiles(filePaths);
+}
+
+/**
+ * DBツリーへファイルD&Dを模擬するヘルパー
+ */
+async function dropDbFiles(page: Page, files: Array<{ filePath: string; fileName?: string }>) {
+  const payload = await Promise.all(files.map(async item => ({
+    name: item.fileName ?? path.basename(item.filePath),
+    bytes: Array.from(await fs.readFile(item.filePath))
+  })));
+
+  await page.evaluate((dropped) => {
+    const dbTree = document.getElementById('db-tree');
+    if (!dbTree) throw new Error('#db-tree が見つかりません');
+
+    const dataTransfer = new DataTransfer();
+    for (const fileItem of dropped) {
+      const file = new File([new Uint8Array(fileItem.bytes)], fileItem.name, { type: 'application/octet-stream' });
+      dataTransfer.items.add(file);
+    }
+
+    dbTree.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer }));
+    dbTree.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer }));
+    dbTree.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }));
+  }, payload);
+}
+
+/**
+ * DBツリーのドラッグ中表示を模擬するヘルパー
+ */
+async function dragOverDbTree(page: Page, fileName: string) {
+  await page.evaluate((name) => {
+    const dbTree = document.getElementById('db-tree');
+    if (!dbTree) throw new Error('#db-tree が見つかりません');
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(new File(['dummy'], name, { type: 'application/octet-stream' }));
+    dbTree.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer }));
+    dbTree.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer }));
+  }, fileName);
 }
 
 async function expandDatabaseNode(page: Page, alias: string) {
@@ -102,6 +142,17 @@ test.describe('複数DB接続・横断クエリ (v1.3.0)', () => {
     await expect(subDbLabel).toBeVisible({ timeout: 5000 });
     await expect(mainDbChildren).toBeVisible();
     await expect(subDbChildren).toBeHidden();
+  });
+
+  test('AC-8: DBツリーD&DはOpenと同一動作で .sqlite を受け入れる', async ({ page }) => {
+    await openDbFiles(page, [MAIN_DB_PATH]);
+
+    await dragOverDbTree(page, 'sub.sqlite');
+    await expect(page.locator('#db-tree')).toHaveClass(/drop-target-active/);
+    await expect(page.locator('#db-tree .db-drop-indicator')).toContainText('DBファイルをドロップして開く / アタッチ');
+
+    await dropDbFiles(page, [{ filePath: SUB_DB_PATH, fileName: 'sub.sqlite' }]);
+    await expect(page.locator('.tree-label.db-node[data-db-alias="sub"]')).toBeVisible({ timeout: 5000 });
   });
 
   test('Databasesツリーはsidebar高さの50%以内に収まりデータセット領域を残す', async ({ page }) => {

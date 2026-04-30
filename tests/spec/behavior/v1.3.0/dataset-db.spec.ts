@@ -1,8 +1,28 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
 import path from 'path';
+import fs from 'fs/promises';
 import { fillSqlEditor, getSqlEditorValue } from '../../../helpers/monacoEditor';
 
 const csvFixture = path.resolve(__dirname, '../../../fixtures/dataset-upload.csv');
+
+async function dropDatasetCsv(page: Page) {
+  const bytes = Array.from(await fs.readFile(csvFixture));
+  await page.evaluate((payload) => {
+    const datasetTree = document.getElementById('dataset-tree');
+    if (!datasetTree) throw new Error('#dataset-tree が見つかりません');
+
+    const dataTransfer = new DataTransfer();
+    const file = new File([new Uint8Array(payload.bytes)], payload.name, { type: 'text/csv' });
+    dataTransfer.items.add(file);
+
+    datasetTree.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer }));
+    datasetTree.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer }));
+    datasetTree.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer }));
+  }, {
+    name: 'dataset-upload.csv',
+    bytes,
+  });
+}
 
 test.describe('dataset DB', () => {
   test('SELECT結果をdataset DBに登録し再読込後も復元する', async ({ page }) => {
@@ -43,6 +63,14 @@ test.describe('dataset DB', () => {
 
     const datasetItems = page.locator('#dataset-tree .tree-label.dataset');
     await expect(datasetItems).toHaveCount(2);
+    await expect(page.locator('#dataset-tree')).toContainText('dataset-upload');
+  });
+
+  test('CSVをデータセットツリーへD&Dして登録できる', async ({ page }) => {
+    await page.goto('/');
+
+    await dropDatasetCsv(page);
+
     await expect(page.locator('#dataset-tree')).toContainText('dataset-upload');
   });
 

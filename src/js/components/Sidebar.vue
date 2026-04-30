@@ -10,9 +10,15 @@
         </button>
       </div>
       <div id="db-tree" v-show="dbTreeOpen" class="tree-view"
-        @dragover.prevent
+        :class="{ 'drop-target-active': isDbDropActive, 'drop-target-invalid': isDbDropInvalid }"
+        @dragenter.prevent="onDbTreeDragEnter"
+        @dragleave.prevent="onDbTreeDragLeave"
+        @dragover.prevent="onDbTreeDragOver"
         @drop.prevent="onDbTreeDrop"
       >
+        <div v-if="isDbDropActive" class="db-drop-indicator" :class="{ invalid: isDbDropInvalid }">
+          {{ isDbDropInvalid ? 'この場所には .db / .sqlite / .sqlite3 / .db3 のみドロップできます' : 'DBファイルをドロップして開く / アタッチ' }}
+        </div>
         <div v-for="schema in dbSchemas" :key="schema.alias" class="tree-item">
           <div
             class="tree-label db-node"
@@ -86,7 +92,16 @@
           <span class="material-symbols-outlined">upload_file</span>
         </button>
       </div>
-      <div id="dataset-tree" v-show="datasetTreeOpen" class="tree-view">
+      <div id="dataset-tree" v-show="datasetTreeOpen" class="tree-view"
+        :class="{ 'drop-target-active': isDatasetDropActive, 'drop-target-invalid': isDatasetDropInvalid }"
+        @dragenter.prevent="onDatasetTreeDragEnter"
+        @dragleave.prevent="onDatasetTreeDragLeave"
+        @dragover.prevent="onDatasetTreeDragOver"
+        @drop.prevent="onDatasetTreeDrop"
+      >
+        <div v-if="isDatasetDropActive" class="dataset-drop-indicator" :class="{ invalid: isDatasetDropInvalid }">
+          {{ isDatasetDropInvalid ? 'この場所には .csv のみドロップできます' : 'CSVファイルをドロップしてデータセット登録' }}
+        </div>
         <div v-if="!datasetTables.length" class="tree-empty">データセットはありません</div>
         <div v-for="name in datasetTables" :key="name" class="tree-item">
           <div class="tree-label dataset-node" style="display:flex;align-items:center;justify-content:space-between">
@@ -143,6 +158,7 @@ const emit = defineEmits<{
   'add-dataset': [];
   'delete-dataset': [name: string];
   'drop-files': [files: File[]];
+  'drop-datasets': [files: File[]];
   'set-query': [query: string];
   'show-ddl': [payload: { alias: string; name: string; objectType: DbObjectType }];
 }>();
@@ -182,6 +198,149 @@ const groupTitleToObjectType: Record<string, DbObjectType> = {
   Indexes: 'index',
   Triggers: 'trigger'
 };
+const DB_FILE_NAME_PATTERN = /\.(db|sqlite|sqlite3|db3)$/i;
+const DATASET_FILE_NAME_PATTERN = /\.csv$/i;
+const isDbDropActive = ref(false);
+const isDbDropInvalid = ref(false);
+const isDatasetDropActive = ref(false);
+const isDatasetDropInvalid = ref(false);
+let dbDragDepth = 0;
+let datasetDragDepth = 0;
+
+/**
+ * 処理名: ファイルドラッグ判定
+ * 処理概要: DragEvent がファイルを含むドラッグかどうかを判定する
+ * 実装理由: テキストやリンクのドラッグにはドロップ表示を出さないため
+ * @param e ドラッグイベント
+ * @returns ファイルドラッグであれば true
+ */
+const isFileDragEvent = (e: DragEvent): boolean => {
+  const items = Array.from(e.dataTransfer?.items ?? []);
+  return items.some(item => item.kind === 'file');
+};
+
+/**
+ * 処理名: DBファイル判定
+ * 処理概要: DragEvent 内にサポート対象の DB ファイル名が含まれるか判定する
+ * 実装理由: ドロップ可否に応じて視覚表示と dropEffect を切り替えるため
+ * @param e ドラッグイベント
+ * @returns サポート対象の DB ファイルが含まれる場合 true
+ */
+/**
+ * 処理名: サポートファイル判定
+ * 処理概要: DragEvent 内に指定パターンに一致するファイルが含まれるか判定する
+ * 実装理由: DBツリーとデータセットツリーで同一判定ロジックを再利用するため
+ * @param e ドラッグイベント
+ * @param fileNamePattern 判定対象の拡張子パターン
+ * @returns 対象ファイルが含まれる場合 true
+ */
+const hasSupportedFile = (e: DragEvent, fileNamePattern: RegExp): boolean => {
+  const files = Array.from(e.dataTransfer?.files ?? []);
+  if (files.length > 0) {
+    return files.some(file => fileNamePattern.test(file.name));
+  }
+
+  const items = Array.from(e.dataTransfer?.items ?? []).filter(item => item.kind === 'file');
+  if (items.length === 0) return false;
+
+  // OS からのドラッグでは dragover 時点で getAsFile() が null の場合があるため、
+  // 種別未判定時は許可寄りに扱い drop 時の最終判定に委ねる。
+  let hasUnknownFile = false;
+  for (const item of items) {
+    const file = item.getAsFile();
+    if (!file) {
+      hasUnknownFile = true;
+      continue;
+    }
+    if (fileNamePattern.test(file.name)) {
+      return true;
+    }
+  }
+  return hasUnknownFile;
+};
+
+/**
+ * 処理名: DBファイル判定
+ * 処理概要: DragEvent 内にサポート対象の DB ファイル名が含まれるか判定する
+ * 実装理由: ドロップ可否に応じて視覚表示と dropEffect を切り替えるため
+ * @param e ドラッグイベント
+ * @returns サポート対象の DB ファイルが含まれる場合 true
+ */
+const hasSupportedDbFile = (e: DragEvent): boolean => hasSupportedFile(e, DB_FILE_NAME_PATTERN);
+
+/**
+ * 処理名: CSVファイル判定
+ * 処理概要: DragEvent 内にサポート対象の CSV ファイル名が含まれるか判定する
+ * 実装理由: データセットツリーへの CSV ドロップ可否を判定するため
+ * @param e ドラッグイベント
+ * @returns サポート対象の CSV ファイルが含まれる場合 true
+ */
+const hasSupportedDatasetFile = (e: DragEvent): boolean => hasSupportedFile(e, DATASET_FILE_NAME_PATTERN);
+
+/**
+ * 処理名: DBドロップ状態更新
+ * 処理概要: DBツリーのドロップ可視状態と可否状態を更新する
+ * 実装理由: dragenter/dragover/drop で状態遷移を共通化するため
+ * @param active ドロップ状態を有効化するか
+ * @param invalid サポート外ファイル状態か
+ */
+const setDbDropState = (active: boolean, invalid = false) => {
+  isDbDropActive.value = active;
+  isDbDropInvalid.value = active && invalid;
+};
+
+/**
+ * 処理名: データセットドロップ状態更新
+ * 処理概要: データセットツリーのドロップ可視状態と可否状態を更新する
+ * 実装理由: dragenter/dragover/drop で状態遷移を共通化するため
+ * @param active ドロップ状態を有効化するか
+ * @param invalid サポート外ファイル状態か
+ */
+const setDatasetDropState = (active: boolean, invalid = false) => {
+  isDatasetDropActive.value = active;
+  isDatasetDropInvalid.value = active && invalid;
+};
+
+/**
+ * 処理名: DBツリードラッグエンターハンドラ
+ * 処理概要: ファイルドラッグ進入時にドロップ可能表示を有効化する
+ * 実装理由: ドロップ対象であることを明示し操作性を高めるため
+ * @param e ドラッグイベント
+ */
+const onDbTreeDragEnter = (e: DragEvent) => {
+  if (!isFileDragEvent(e)) return;
+  dbDragDepth += 1;
+  setDbDropState(true, !hasSupportedDbFile(e));
+};
+
+/**
+ * 処理名: DBツリードラッグリーブハンドラ
+ * 処理概要: ファイルドラッグ離脱時にドロップ可能表示を解除する
+ * 実装理由: 子要素をまたぐ dragleave でも表示がちらつかないよう深度管理するため
+ * @param e ドラッグイベント
+ */
+const onDbTreeDragLeave = (e: DragEvent) => {
+  if (!isFileDragEvent(e)) return;
+  dbDragDepth = Math.max(0, dbDragDepth - 1);
+  if (dbDragDepth === 0) {
+    setDbDropState(false);
+  }
+};
+
+/**
+ * 処理名: DBツリードラッグオーバーハンドラ
+ * 処理概要: ファイルドラッグ中のドロップ可否表示を更新し dropEffect を設定する
+ * 実装理由: 利用者に copy/none のフィードバックを即時に返すため
+ * @param e ドラッグイベント
+ */
+const onDbTreeDragOver = (e: DragEvent) => {
+  if (!isFileDragEvent(e)) return;
+  const canDrop = hasSupportedDbFile(e);
+  setDbDropState(true, !canDrop);
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = canDrop ? 'copy' : 'none';
+  }
+};
 
 /**
  * 処理名: DBツリー開閉トグル
@@ -197,7 +356,9 @@ const onDbTreeTitleClick = () => { dbTreeOpen.value = !dbTreeOpen.value; };
  * @param e ドラッグイベント
  */
 const onDbTreeDrop = (e: DragEvent) => {
-  const dropped = Array.from(e.dataTransfer?.files ?? []).filter(f => /\.db$/i.test(f.name));
+  dbDragDepth = 0;
+  setDbDropState(false);
+  const dropped = Array.from(e.dataTransfer?.files ?? []).filter(f => DB_FILE_NAME_PATTERN.test(f.name));
   if (dropped.length) emit('drop-files', dropped);
 };
 
@@ -290,6 +451,60 @@ const datasetTables = ref<string[]>([]);
  * 実装理由: パネルタイトルのクリックイベントに対応するため
  */
 const onDatasetTreeTitleClick = () => { datasetTreeOpen.value = !datasetTreeOpen.value; };
+
+/**
+ * 処理名: データセットツリードラッグエンターハンドラ
+ * 処理概要: CSVファイルドラッグ進入時にドロップ可能表示を有効化する
+ * 実装理由: データセット追加のドロップ対象を明示するため
+ * @param e ドラッグイベント
+ */
+const onDatasetTreeDragEnter = (e: DragEvent) => {
+  if (!isFileDragEvent(e)) return;
+  datasetDragDepth += 1;
+  setDatasetDropState(true, !hasSupportedDatasetFile(e));
+};
+
+/**
+ * 処理名: データセットツリードラッグリーブハンドラ
+ * 処理概要: CSVファイルドラッグ離脱時にドロップ可能表示を解除する
+ * 実装理由: 子要素をまたぐ dragleave でも表示を安定させるため
+ * @param e ドラッグイベント
+ */
+const onDatasetTreeDragLeave = (e: DragEvent) => {
+  if (!isFileDragEvent(e)) return;
+  datasetDragDepth = Math.max(0, datasetDragDepth - 1);
+  if (datasetDragDepth === 0) {
+    setDatasetDropState(false);
+  }
+};
+
+/**
+ * 処理名: データセットツリードラッグオーバーハンドラ
+ * 処理概要: CSVドラッグ中のドロップ可否表示を更新し dropEffect を設定する
+ * 実装理由: 利用者に copy/none のフィードバックを返すため
+ * @param e ドラッグイベント
+ */
+const onDatasetTreeDragOver = (e: DragEvent) => {
+  if (!isFileDragEvent(e)) return;
+  const canDrop = hasSupportedDatasetFile(e);
+  setDatasetDropState(true, !canDrop);
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = canDrop ? 'copy' : 'none';
+  }
+};
+
+/**
+ * 処理名: データセットツリードロップハンドラ
+ * 処理概要: CSVファイルドロップ時に親コンポーネントへファイル一覧を通知する
+ * 実装理由: add-dataset ボタンと同等のデータセット取り込みを可能にするため
+ * @param e ドラッグイベント
+ */
+const onDatasetTreeDrop = (e: DragEvent) => {
+  datasetDragDepth = 0;
+  setDatasetDropState(false);
+  const dropped = Array.from(e.dataTransfer?.files ?? []).filter(f => DATASET_FILE_NAME_PATTERN.test(f.name));
+  if (dropped.length) emit('drop-datasets', dropped);
+};
 
 /**
  * 処理名: テーブルクリックハンドラ

@@ -18,6 +18,7 @@
                 @add-dataset="handleAddDataset"
                 @delete-dataset="handleDeleteDataset"
                 @drop-files="handleDbTreeDrop"
+                @drop-datasets="handleDatasetTreeDrop"
                 @set-query="handleSetQuery"
                 @show-ddl="handleShowDdl"
             />
@@ -27,6 +28,7 @@
                 @register-dataset="handleRegisterDataset"
                 @download-csv="handleDownloadCsv"
                 @run-query="handleRunQuery"
+                @drop-query="handleQueryEditorDrop"
             />
         </div>
         <StatusBar ref="statusBarRef" />
@@ -58,7 +60,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue';
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import MenuBar from './components/MenuBar.vue';
 import Sidebar from './components/Sidebar.vue';
 import MainArea from './components/MainArea.vue';
@@ -90,6 +92,8 @@ let dbReady: Promise<SQLiteManager> | null = null;
 let currentDbPath = 'Untitled.db';
 let mainHidden = false;
 let queryExecutionSerial = 0;
+const DB_FILE_ACCEPT = '.db,.sqlite,.sqlite3,.db3';
+const DB_FILE_NAME_PATTERN = /\.(db|sqlite|sqlite3|db3)$/i;
 
 /**
  * 処理名: DB インスタンス取得
@@ -401,29 +405,51 @@ const attachAdditionalFiles = async (dbInst: SQLiteManager, files: File[], start
 };
 
 /**
+ * 処理名: DBファイル抽出
+ * 処理概要: 指定ファイル配列からサポート対象の DB ファイルのみを抽出する
+ * 実装理由: Open と D&D の受け入れ条件を同一に保つため
+ * @param files 判定対象のファイル配列
+ * @returns サポート対象の DB ファイル配列
+ */
+const filterDbFiles = (files: File[]): File[] => files.filter(file => DB_FILE_NAME_PATTERN.test(file.name));
+
+/**
+ * 処理名: DBファイル一括オープン
+ * 処理概要: ファイル配列を Open 操作と同一ルールでメイン読込またはアタッチする
+ * 実装理由: ファイル選択と D&D で同一挙動を保証するため
+ * @param files 開く対象の DB ファイル配列
+ */
+const openDbFiles = async (files: File[]): Promise<void> => {
+    const dbFiles = filterDbFiles(files);
+    if (!dbFiles.length) return;
+
+    const dbInst = await getDb();
+    const hasExisting = currentDbPath !== 'Untitled.db' || mainHidden;
+    if (hasExisting) {
+        await attachAdditionalFiles(dbInst, dbFiles, 0);
+    } else {
+        const first = dbFiles[0];
+        const data = new Uint8Array(await readFileAsArrayBuffer(first));
+        await dbInst.import(data);
+        ensureDatasetDatabase(dbInst);
+        mainHidden = false;
+        setDbStatus(first.name);
+        showSuccess(`データベース '${first.name}' を開きました`);
+        await attachAdditionalFiles(dbInst, dbFiles, 1);
+    }
+    refreshTrees();
+};
+
+/**
  * 処理名: DB ファイルを開く
  * 処理概要: ファイル選択ダイアログで選択した DB ファイルを開くかアタッチする
  * 実装理由: 既存 DB がある場合はアタッチ、ない場合はメインとして開く 2 つのモードに対応
  */
 const handleOpenDb = async () => {
     try {
-        const files = await pickFiles('.db,.sqlite,.sqlite3,.db3', true);
+        const files = await pickFiles(DB_FILE_ACCEPT, true);
         if (!files.length) return;
-        const dbInst = await getDb();
-        const hasExisting = currentDbPath !== 'Untitled.db' || mainHidden;
-        if (hasExisting) {
-            await attachAdditionalFiles(dbInst, files, 0);
-        } else {
-            const first = files[0];
-            const data = new Uint8Array(await readFileAsArrayBuffer(first));
-            await dbInst.import(data);
-            ensureDatasetDatabase(dbInst);
-            mainHidden = false;
-            setDbStatus(first.name);
-            showSuccess(`データベース '${first.name}' を開きました`);
-            await attachAdditionalFiles(dbInst, files, 1);
-        }
-        refreshTrees();
+        await openDbFiles(files);
     } catch (e) {
         showError(`インポートエラー: ${(e as Error).message}`);
     }
@@ -464,6 +490,23 @@ const handleOpenQuery = async () => {
     try {
         const files = await pickFiles('.sql');
         if (!files.length) return;
+        const text = await readFileAsText(files[0]);
+        mainAreaRef.value?.setActiveQuery(text);
+        showSuccess(`SQLファイル '${files[0].name}' を読み込みました`);
+    } catch (e) {
+        showError(`SQLファイル読み込みエラー: ${(e as Error).message}`);
+    }
+};
+
+/**
+ * 処理名: クエリエディタへの SQL D&D ハンドラ
+ * 処理概要: ドロップされた .sql ファイルを読み込んでエディタに設定する
+ * 実装理由: open-query-button と同等の操作を D&D で実現するため
+ * @param files ドロップされた .sql ファイル配列
+ */
+const handleQueryEditorDrop = async (files: File[]): Promise<void> => {
+    if (!files.length) return;
+    try {
         const text = await readFileAsText(files[0]);
         mainAreaRef.value?.setActiveQuery(text);
         showSuccess(`SQLファイル '${files[0].name}' を読み込みました`);
@@ -523,9 +566,13 @@ const handleDetachDb = async (alias: string) => {
  * 処理概要: CSV ファイルを選択し dataset DB にインポートする
  * 実装理由: サイドバーの「データセット追加」ボタン操作に対応するため
  */
-const handleAddDataset = async () => {
-    const [file] = await pickFiles('.csv,text/csv');
-    if (!file) return;
+/**
+ * 処理名: CSVデータセット登録
+ * 処理概要: 指定CSVファイルを dataset DB に取り込みサイドバー表示を更新する
+ * 実装理由: ボタン選択と D&D で同一処理を共有するため
+ * @param file 取り込む CSV ファイル
+ */
+const importDatasetCsv = async (file: File): Promise<void> => {
     let dbInst: SQLiteManager;
     try { dbInst = await getDb(); } catch { return; }
     try {
@@ -535,6 +582,17 @@ const handleAddDataset = async () => {
     } catch (e) {
         showError((e instanceof Error ? e.message : String(e)) || 'CSVの読み込みに失敗しました');
     }
+};
+
+/**
+ * 処理名: CSV データセット追加ハンドラ
+ * 処理概要: CSV ファイルを選択し dataset DB にインポートする
+ * 実装理由: サイドバーの「データセット追加」ボタン操作に対応するため
+ */
+const handleAddDataset = async () => {
+    const [file] = await pickFiles('.csv,text/csv');
+    if (!file) return;
+    await importDatasetCsv(file);
 };
 
 /**
@@ -562,19 +620,22 @@ const handleDeleteDataset = async (name: string) => {
  */
 const handleDbTreeDrop = async (dropped: File[]) => {
     try {
-        const dbInst = await getDb();
-        const first = dropped[0];
-        const data = new Uint8Array(await readFileAsArrayBuffer(first));
-        await dbInst.import(data);
-        ensureDatasetDatabase(dbInst);
-        mainHidden = false;
-        setDbStatus(first.name);
-        showSuccess(`データベース '${first.name}' を開きました`);
-        await attachAdditionalFiles(dbInst, dropped, 1);
-        refreshTrees();
+        await openDbFiles(dropped);
     } catch (err) {
         showError(`インポートエラー: ${(err as Error).message}`);
     }
+};
+
+/**
+ * 処理名: データセットツリードロップハンドラ
+ * 処理概要: データセットツリーへドロップされたCSVを add-dataset と同一仕様で取り込む
+ * 実装理由: データセット登録を D&D でも実行可能にするため
+ * @param dropped ドロップされた CSV ファイル配列
+ */
+const handleDatasetTreeDrop = async (dropped: File[]) => {
+    const [file] = dropped;
+    if (!file) return;
+    await importDatasetCsv(file);
 };
 
 /**
@@ -649,8 +710,63 @@ const handleDownloadCsv = () => {
 // ---- splitter ----
 useColumnSplitter(splitterEl, () => sidebarRef.value?.$el as HTMLElement | undefined);
 
+// ---- ブラウザ既定のファイルドロップ遷移を抑止 ----
+const MANAGED_DROP_TARGET_SELECTOR = '#db-tree, #dataset-tree, #query-editor';
+
+/**
+ * 処理名: 管理対象ドロップエリア判定
+ * 処理概要: イベントターゲットがアプリで管理している D&D エリア内かを判定する
+ * 実装理由: 管理対象エリアでは個別ハンドラの dropEffect / drop 判定を優先するため
+ * @param target イベントターゲット
+ * @returns 管理対象エリア内なら true
+ */
+const isManagedDropTarget = (target: EventTarget | null): boolean => {
+    if (!(target instanceof Element)) return false;
+    return Boolean(target.closest(MANAGED_DROP_TARGET_SELECTOR));
+};
+
+/**
+ * 処理名: ファイルドラッグ判定
+ * 処理概要: DragEvent がファイルを含むドラッグかどうかを判定する
+ * 実装理由: テキスト/リンク等の通常ドラッグ操作を抑止しないため
+ * @param e ドラッグイベント
+ * @returns ファイルドラッグであれば true
+ */
+const isFileDragEvent = (e: DragEvent): boolean => {
+    const types = Array.from(e.dataTransfer?.types ?? []);
+    return types.includes('Files');
+};
+
+/**
+ * 処理名: ドキュメント全体のドラッグオーバー抑止
+ * 処理概要: D&D 対応エリア以外へのファイルドラッグ時にブラウザ既定のドロップを抑止する
+ * 実装理由: ファイルをD&Dした際に意図しないページ遷移が発生しないようにするため
+ * @param e ドラッグイベント
+ */
+const suppressBrowserDragover = (e: DragEvent): void => {
+    if (!isFileDragEvent(e)) return;
+    if (e.defaultPrevented || isManagedDropTarget(e.target)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+};
+
+/**
+ * 処理名: ドキュメント全体のドロップ抑止
+ * 処理概要: D&D 対応エリア以外へのファイルドロップ時にブラウザ既定動作を抑止する
+ * 実装理由: ファイルをD&Dした際に意図しないページ遷移が発生しないようにするため
+ * @param e ドラッグイベント
+ */
+const suppressBrowserDrop = (e: DragEvent): void => {
+    if (!isFileDragEvent(e)) return;
+    if (e.defaultPrevented || isManagedDropTarget(e.target)) return;
+    e.preventDefault();
+};
+
 // ---- DB初期化 ----
 onMounted(async () => {
+    document.addEventListener('dragover', suppressBrowserDragover);
+    document.addEventListener('drop', suppressBrowserDrop);
+
     // SQLエディタのブリッジAPIをウィンドウに公開（テスト用）- DB初期化前に設定して即時利用可能にする
     window.__sqlEditorBridge = {
         /**
@@ -671,5 +787,10 @@ onMounted(async () => {
         ensureDatasetDatabase(db);
         sidebarRef.value?.updateDatasetTree(listDatasetTables(db));
     }
+});
+
+onBeforeUnmount(() => {
+    document.removeEventListener('dragover', suppressBrowserDragover);
+    document.removeEventListener('drop', suppressBrowserDrop);
 });
 </script>

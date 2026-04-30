@@ -15,7 +15,19 @@
     </div>
 
     <!-- クエリエリア（単一MonacoEditorをアクティブタブで共有） -->
-    <div id="query-editor" class="query-editor" ref="queryEditorEl">
+    <div
+      id="query-editor"
+      class="query-editor"
+      ref="queryEditorEl"
+      :class="{ 'drop-target-active': isQueryDropActive, 'drop-target-invalid': isQueryDropInvalid }"
+      @dragenter.prevent="onQueryEditorDragEnter"
+      @dragleave.prevent="onQueryEditorDragLeave"
+      @dragover.prevent="onQueryEditorDragOver"
+      @drop.prevent="onQueryEditorDrop"
+    >
+      <div v-if="isQueryDropActive" class="query-drop-indicator" :class="{ invalid: isQueryDropInvalid }">
+        {{ isQueryDropInvalid ? 'この場所には .sql のみドロップできます' : 'SQLファイルをドロップしてクエリを読み込む' }}
+      </div>
       <MonacoEditor
         id="sql-editor"
         :value="activeTabQuery"
@@ -105,6 +117,7 @@ const emit = defineEmits<{
   'register-dataset': [];
   'download-csv': [];
   'run-query': [];
+  'drop-query': [files: File[]];
 }>();
 
 defineOptions({ name: 'AppMainArea' });
@@ -382,6 +395,15 @@ const getCurrentResultData = (): ResultData | null => {
 };
 
 /**
+ * 処理名: クエリ実行ショートカット処理
+ * 処理概要: Ctrl+Enter でクエリ実行イベントを発火する
+ * 実装理由: addAction の無名関数を避けて可読性と JSDoc 要件を満たすため
+ */
+const runQueryShortcut = () => {
+  emit('run-query');
+};
+
+/**
  * 処理名: Monacoエディタマウント時ハンドラ
  * 処理概要: Ctrl+Enter ショートカットでクエリ実行イベントを発火する
  * 実装理由: query-editor フォーカス中にキーボードからクエリを実行できるようにするため
@@ -392,14 +414,122 @@ const onEditorMounted = (editor: monaco.editor.IStandaloneCodeEditor) => {
     id: 'run-query-shortcut',
     label: 'Run Query',
     keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
-    run: () => { emit('run-query'); },
+    run: runQueryShortcut,
   });
+};
+
+// ---- クエリエディタ D&D ----
+const SQL_FILE_NAME_PATTERN = /\.sql$/i;
+const isQueryDropActive = ref(false);
+const isQueryDropInvalid = ref(false);
+let queryDragDepth = 0;
+
+/**
+ * 処理名: ファイルドラッグ判定
+ * 処理概要: DragEvent がファイルを含むドラッグかどうかを判定する
+ * 実装理由: テキストやリンクのドラッグにはドロップ表示を出さないため
+ * @param e ドラッグイベント
+ * @returns ファイルドラッグであれば true
+ */
+const isFileDragEvent = (e: DragEvent): boolean => {
+  const items = Array.from(e.dataTransfer?.items ?? []);
+  return items.some(item => item.kind === 'file');
+};
+
+/**
+ * 処理名: SQLファイル判定
+ * 処理概要: DragEvent 内にサポート対象の .sql ファイルが含まれるか判定する
+ * 実装理由: ドロップ可否に応じて視覚表示と dropEffect を切り替えるため
+ * @param e ドラッグイベント
+ * @returns .sql ファイルが含まれる場合 true
+ */
+const hasSupportedSqlFile = (e: DragEvent): boolean => {
+  const files = Array.from(e.dataTransfer?.files ?? []);
+  if (files.length > 0) return files.some(f => SQL_FILE_NAME_PATTERN.test(f.name));
+  const items = Array.from(e.dataTransfer?.items ?? []).filter(i => i.kind === 'file');
+  if (items.length === 0) return false;
+  let hasUnknown = false;
+  for (const item of items) {
+    const file = item.getAsFile();
+    if (!file) { hasUnknown = true; continue; }
+    if (SQL_FILE_NAME_PATTERN.test(file.name)) return true;
+  }
+  return hasUnknown;
+};
+
+/**
+ * 処理名: クエリエディタドロップ状態更新
+ * 処理概要: クエリエディタのドロップ可視状態と可否状態を更新する
+ * 実装理由: dragenter/dragover/drop で状態遷移を共通化するため
+ * @param active ドロップ状態を有効化するか
+ * @param invalid サポート外ファイル状態か
+ */
+const setQueryDropState = (active: boolean, invalid = false) => {
+  isQueryDropActive.value = active;
+  isQueryDropInvalid.value = active && invalid;
+};
+
+/**
+ * 処理名: クエリエディタドラッグエンターハンドラ
+ * 処理概要: SQLファイルドラッグ進入時にドロップ可能表示を有効化する
+ * 実装理由: ドロップ対象であることを明示し操作性を高めるため
+ * @param e ドラッグイベント
+ */
+const onQueryEditorDragEnter = (e: DragEvent) => {
+  if (!isFileDragEvent(e)) return;
+  queryDragDepth += 1;
+  setQueryDropState(true, !hasSupportedSqlFile(e));
+};
+
+/**
+ * 処理名: クエリエディタドラッグリーブハンドラ
+ * 処理概要: ファイルドラッグ離脱時にドロップ可能表示を解除する
+ * 実装理由: 子要素をまたぐ dragleave でも表示がちらつかないよう深度管理するため
+ * @param e ドラッグイベント
+ */
+const onQueryEditorDragLeave = (e: DragEvent) => {
+  if (!isFileDragEvent(e)) return;
+  queryDragDepth = Math.max(0, queryDragDepth - 1);
+  if (queryDragDepth === 0) setQueryDropState(false);
+};
+
+/**
+ * 処理名: クエリエディタドラッグオーバーハンドラ
+ * 処理概要: SQLドラッグ中のドロップ可否表示を更新し dropEffect を設定する
+ * 実装理由: 利用者に copy/none のフィードバックを即時に返すため
+ * @param e ドラッグイベント
+ */
+const onQueryEditorDragOver = (e: DragEvent) => {
+  if (!isFileDragEvent(e)) return;
+  const canDrop = hasSupportedSqlFile(e);
+  setQueryDropState(true, !canDrop);
+  if (e.dataTransfer) e.dataTransfer.dropEffect = canDrop ? 'copy' : 'none';
+};
+
+/**
+ * 処理名: クエリエディタドロップハンドラ
+ * 処理概要: .sql ファイルドロップ時に親コンポーネントへファイル一覧を通知する
+ * 実装理由: open-query-button と同等の SQL 読み込みを D&D で可能にするため
+ * @param e ドラッグイベント
+ */
+const onQueryEditorDrop = (e: DragEvent) => {
+  queryDragDepth = 0;
+  setQueryDropState(false);
+  const dropped = Array.from(e.dataTransfer?.files ?? []).filter(f => SQL_FILE_NAME_PATTERN.test(f.name));
+  if (dropped.length) emit('drop-query', dropped);
 };
 
 // ---- rowSplitter ----
 const rowSplitterEl = ref<HTMLElement | null>(null);
 const queryEditorEl = ref<HTMLElement | null>(null);
-useRowSplitter(rowSplitterEl, () => queryEditorEl.value);
+/**
+ * 処理名: クエリエディタ要素取得
+ * 処理概要: 行スプリッターが参照するクエリエディタ要素を返す
+ * 実装理由: 無名関数を避けて可読性と JSDoc 要件を満たすため
+ * @returns クエリエディタ要素
+ */
+const getQueryEditorElement = (): HTMLElement | null => queryEditorEl.value;
+useRowSplitter(rowSplitterEl, getQueryEditorElement);
 
 defineExpose({
   addQueryTab,
