@@ -101,6 +101,30 @@ module.exports = {
           globOptions: {
             ignore: ['**/*.js', '**/*.mjs']
           }
+        },
+        {
+          from: 'src/pwa/manifest.webmanifest',
+          to: './manifest.webmanifest'
+        },
+        {
+          from: 'src/pwa/service-worker.js',
+          to: './service-worker.js'
+        },
+        {
+          from: 'src/assets/pwa/icon-192.png',
+          to: './icon-192.png'
+        },
+        {
+          from: 'src/assets/pwa/icon-512.png',
+          to: './icon-512.png'
+        },
+        {
+          from: 'src/assets/pwa/apple-touch-icon.png',
+          to: './apple-touch-icon.png'
+        },
+        {
+          from: 'src/assets/pwa/favicon.ico',
+          to: './favicon.ico'
         }
       ]
     }),
