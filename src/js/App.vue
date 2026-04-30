@@ -56,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, nextTick } from 'vue';
 import MenuBar from './components/MenuBar.vue';
 import Sidebar from './components/Sidebar.vue';
 import MainArea from './components/MainArea.vue';
@@ -86,6 +86,7 @@ let db: SQLiteManager | null = null;
 let dbReady: Promise<SQLiteManager> | null = null;
 let currentDbPath = 'Untitled.db';
 let mainHidden = false;
+let queryExecutionSerial = 0;
 
 const getDb = (): Promise<SQLiteManager> => {
     if (dbReady) return dbReady;
@@ -178,7 +179,10 @@ const handleRunQuery = async () => {
     const query = mainAreaRef.value?.getActiveQuery()?.trim();
     if (!query) { showError('実行するクエリを入力してください'); return; }
 
+    queryExecutionSerial += 1;
+    const executionId = queryExecutionSerial;
     mainAreaRef.value?.clearResultTabs();
+    await nextTick();
 
     try {
         const results = dbInst.executeQuery(query) as Array<{ success: boolean; results?: Record<string, unknown>[]; columns?: string[]; error?: string; info?: { changes?: number } }>;
@@ -188,7 +192,7 @@ const handleRunQuery = async () => {
         for (let idx = 0; idx < results.length; idx++) {
             const result = results[idx];
             if (result.success && result.results?.length) {
-                const tableId = idx === 0 ? 'results-table' : `results-table-${idx + 1}`;
+                const tableId = `results-table-${executionId}-${idx + 1}`;
                 const label = results.length === 1 ? 'Results' : `Results${idx + 1}`;
                 mainAreaRef.value?.addResultTab(label, tableId);
                 mainAreaRef.value?.setResultGridData(tableId, result as { columns: string[]; results: Record<string, unknown>[] });

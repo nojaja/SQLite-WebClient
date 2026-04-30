@@ -66,6 +66,7 @@
           >
             <DataTable
               v-if="hasResultGridData(tab.resultsId)"
+              :key="`${tab.resultsId}-${getResultGridData(tab.resultsId)?.renderKey ?? 0}`"
               :data="getResultGridData(tab.resultsId)?.data ?? []"
               :columns="(getResultGridData(tab.resultsId)?.columns ?? []).map(col => ({ data: col, title: col }))"
               :options="dtOptions"
@@ -160,6 +161,7 @@ const setActiveQuery = (value: string) => {
 interface ResultData {
   columns: string[];
   data: Record<string, unknown>[];
+  renderKey: number;
 }
 
 const resultGridData = reactive<Map<string, ResultData>>(new Map());
@@ -171,6 +173,8 @@ const dtOptions = {
   fixedHeader: false,
   layout: { topStart: null, topEnd: null },
 };
+
+let dataTableRenderSerial = 0;
 
 const hasResultGridData = (tableId: string): boolean => resultGridData.has(tableId);
 const getResultGridData = (tableId: string): ResultData | undefined => resultGridData.get(tableId);
@@ -246,7 +250,18 @@ const setMessages = (msg: string | string[]) => {
 // ---- 結果グリッドデータ管理 ----
 /** 指定タブに結果データをセット（DataTable コンポーネントが自動描画） */
 const setResultGridData = (tableId: string, data: { columns: string[]; results: Record<string, unknown>[] }) => {
-  resultGridData.set(tableId, { columns: data.columns, data: data.results });
+  const columns = [...data.columns];
+  const normalizedRows = data.results.map((row) => {
+    const normalizedRow: Record<string, unknown> = {};
+    columns.forEach((column) => {
+      const value = Object.prototype.hasOwnProperty.call(row, column) ? row[column] : null;
+      normalizedRow[column] = value === undefined ? null : value;
+    });
+    return normalizedRow;
+  });
+
+  const nextRenderKey = ++dataTableRenderSerial;
+  resultGridData.set(tableId, { columns, data: normalizedRows, renderKey: nextRenderKey });
 };
 
 /** アクティブな結果タブのデータを返す（CSVダウンロード・データセット登録に使用） */
