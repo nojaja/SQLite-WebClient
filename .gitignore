@@ -139,3 +139,4 @@ dist
 /playwright-report
 /test-results
 playwright-result.json
+/docs/chat
