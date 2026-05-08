@@ -1,7 +1,7 @@
 <template>
-  <div id="sidebar" class="sidebar" @click.capture="closeDbObjectContextMenu">
+  <div id="sidebar" ref="sidebarEl" class="sidebar" @click.capture="closeDbObjectContextMenu">
     <!-- Databasesツリー -->
-    <div class="tree-block databases-tree-block">
+    <div ref="databasesTreeBlockEl" class="tree-block databases-tree-block">
       <div class="tree-title" style="cursor:pointer" @click="onDbTreeTitleClick">
         <span class="material-symbols-outlined tree-toggle-icon">{{ dbTreeOpen ? 'expand_more' : 'chevron_right' }}</span>
         Databases
@@ -83,6 +83,8 @@
       </div>
     </div>
 
+    <div class="row-splitter sidebar-tree-splitter" ref="sidebarRowSplitterEl"></div>
+
     <!-- データセットツリー -->
     <div class="tree-block dataset-tree-block">
       <div class="tree-title" style="cursor:pointer" @click="onDatasetTreeTitleClick">
@@ -149,6 +151,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue';
 import { buildSelectAllQuery, DATASET_DB_ALIAS } from '../datasetDb';
+import { useSidebarRowSplitter } from '../composables/useSidebarRowSplitter';
 
 defineOptions({ name: 'AppSidebar' });
 
@@ -206,6 +209,16 @@ const isDatasetDropActive = ref(false);
 const isDatasetDropInvalid = ref(false);
 let dbDragDepth = 0;
 let datasetDragDepth = 0;
+const sidebarEl = ref<HTMLElement | null>(null);
+const databasesTreeBlockEl = ref<HTMLElement | null>(null);
+const sidebarRowSplitterEl = ref<HTMLElement | null>(null);
+
+useSidebarRowSplitter(
+  sidebarRowSplitterEl,
+  () => sidebarEl.value,
+  () => databasesTreeBlockEl.value,
+  { minTopHeight: 180, minBottomHeight: 180 },
+);
 
 /**
  * 処理名: ファイルドラッグ判定

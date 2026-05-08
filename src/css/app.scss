@@ -99,12 +99,18 @@ body {
 
 .databases-tree-block {
   flex: 0 0 40%;
-  min-height: 220px;
-  max-height: 60%;
+  min-height: 180px;
 }
 
 .dataset-tree-block {
   flex: 1 1 0;
+  min-height: 180px;
+}
+
+.sidebar-tree-splitter {
+  flex: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .databases-tree-block .tree-view,
