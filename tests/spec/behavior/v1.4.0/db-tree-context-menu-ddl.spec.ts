@@ -24,7 +24,7 @@ test.describe('Databasesツリー右クリックメニュー (v1.4.0)', () => {
     await page.waitForFunction(() => typeof window !== 'undefined');
   });
 
-  test('Tables/Views/Indexes/Triggers の右クリックメニューからDDLを表示できる', async ({ page }) => {
+  test('Tables/Views/Indexes/Triggers の右クリックメニューからCREATE文を挿入できる', async ({ page }) => {
     await page.click('#new-db-button');
     await fillSqlEditor(
       page,
@@ -37,6 +37,7 @@ test.describe('Databasesツリー右クリックメニュー (v1.4.0)', () => {
 
     await expandTreeGroup(page, 'main', 'Tables');
     await page.locator('#db-tree .tree-label.Tables[data-name="test"]').first().click({ button: 'right' });
+    await expect(page.locator('#db-object-show-ddl-menu')).toHaveText('CREATE文の挿入');
     await page.click('#db-object-show-ddl-menu');
     expect(await getSqlEditorValue(page)).toMatch(/CREATE TABLE\s+test/i);
 

@@ -22,8 +22,8 @@
       :class="{ 'drop-target-active': isQueryDropActive, 'drop-target-invalid': isQueryDropInvalid }"
       @dragenter.prevent="onQueryEditorDragEnter"
       @dragleave.prevent="onQueryEditorDragLeave"
-      @dragover.prevent="onQueryEditorDragOver"
-      @drop.prevent="onQueryEditorDrop"
+      @dragover.capture.prevent="onQueryEditorDragOver"
+      @drop.capture.prevent="onQueryEditorDrop"
     >
       <div v-if="isQueryDropActive" class="query-drop-indicator" :class="{ invalid: isQueryDropInvalid }">
         {{ isQueryDropInvalid ? 'この場所には .sql のみドロップできます' : 'SQLファイルをドロップしてクエリを読み込む' }}
@@ -132,6 +132,7 @@ interface QueryTab {
 const queryTabs = ref<QueryTab[]>([{ id: 'query1', label: 'Query1', query: '' }]);
 const activeQueryTabId = ref('query1');
 let queryTabSerial = 2;
+const sqlEditorRef = ref<monaco.editor.IStandaloneCodeEditor | null>(null);
 
 /** Monacoエディタの設定オプション */
 const monacoOptions = {
@@ -141,6 +142,7 @@ const monacoOptions = {
   fontSize: 14,
   lineNumbers: 'on' as const,
   automaticLayout: true,
+  dragAndDrop: false,
 };
 
 /**
@@ -221,6 +223,19 @@ const getActiveQuery = (): string => {
 const setActiveQuery = (value: string) => {
   const tab = queryTabs.value.find(t => t.id === activeQueryTabId.value);
   if (tab) tab.query = value;
+};
+
+/**
+ * 処理名: アクティブタブへクエリ追記
+ * 処理概要: 現在のクエリ末尾に SQL 文字列を追記する
+ * 実装理由: サイドバーのコンテキストメニュー操作で SQL を追記するため
+ * @param value 追記する SQL 文字列
+ */
+const appendActiveQuery = (value: string) => {
+  const tab = queryTabs.value.find(t => t.id === activeQueryTabId.value);
+  if (!tab || !value) return;
+  const needsSeparator = tab.query.trim().length > 0 && !tab.query.endsWith('\n');
+  tab.query = `${tab.query}${needsSeparator ? '\n' : ''}${value}\n`;
 };
 
 // ---- 結果タブ ----
@@ -404,12 +419,28 @@ const runQueryShortcut = () => {
 };
 
 /**
+ * 処理名: 位置指定テキスト挿入
+ * 処理概要: ツリー項目のドロップ時にアクティブタブ末尾へテキストを追記する
+ * 実装理由: Monaco の executeEdits を直接呼ぶと Language Worker が起動し
+ *           Playwright のテストや drop イベントハンドラ内でハングするため、
+ *           Vue リアクティブ状態経由の appendActiveQuery を使用する
+ * @param text 挿入する文字列
+ * @param _clientX ドロップ座標X（将来の位置指定挿入実装のために予約）
+ * @param _clientY ドロップ座標Y（将来の位置指定挿入実装のために予約）
+ */
+const insertTextAtClientPoint = (text: string, _clientX: number, _clientY: number) => {
+  if (!text) return;
+  appendActiveQuery(text);
+};
+
+/**
  * 処理名: Monacoエディタマウント時ハンドラ
  * 処理概要: Ctrl+Enter ショートカットでクエリ実行イベントを発火する
  * 実装理由: query-editor フォーカス中にキーボードからクエリを実行できるようにするため
  * @param editor Monacoエディタインスタンス
  */
 const onEditorMounted = (editor: monaco.editor.IStandaloneCodeEditor) => {
+  sqlEditorRef.value = editor;
   editor.addAction({
     id: 'run-query-shortcut',
     label: 'Run Query',
@@ -420,6 +451,8 @@ const onEditorMounted = (editor: monaco.editor.IStandaloneCodeEditor) => {
 
 // ---- クエリエディタ D&D ----
 const SQL_FILE_NAME_PATTERN = /\.sql$/i;
+const TREE_ITEM_TRANSFER_TYPE = 'application/x-sqlite-webclient-tree-item-name';
+const PLAIN_TEXT_TRANSFER_TYPE = 'text/plain';
 const isQueryDropActive = ref(false);
 const isQueryDropInvalid = ref(false);
 let queryDragDepth = 0;
@@ -434,6 +467,35 @@ let queryDragDepth = 0;
 const isFileDragEvent = (e: DragEvent): boolean => {
   const items = Array.from(e.dataTransfer?.items ?? []);
   return items.some(item => item.kind === 'file');
+};
+
+/**
+ * 処理名: ツリー項目ドラッグ判定
+ * 処理概要: DragEvent がツリー項目ドラッグかどうかを判定する
+ * 実装理由: ファイル D&D と tree-item D&D の挙動を分岐するため
+ * @param e ドラッグイベント
+ * @returns ツリー項目ドラッグであれば true
+ */
+const isTreeItemDragEvent = (e: DragEvent): boolean => {
+  const types = Array.from(e.dataTransfer?.types ?? []);
+  if (types.includes(TREE_ITEM_TRANSFER_TYPE)) return true;
+  // 一部ブラウザ操作では custom MIME が欠落し text/plain のみ残ることがある。
+  // ファイルD&Dでない text/plain は tree-item として扱う。
+  return !isFileDragEvent(e) && types.includes(PLAIN_TEXT_TRANSFER_TYPE);
+};
+
+/**
+ * 処理名: ツリー項目名抽出
+ * 処理概要: DragEvent から挿入対象の項目名を取り出す
+ * 実装理由: ドロップ時に挿入文字列を取得するため
+ * @param e ドラッグイベント
+ * @returns 挿入対象の文字列
+ */
+const getDraggedTreeItemName = (e: DragEvent): string => {
+  if (!e.dataTransfer) return '';
+  const customName = e.dataTransfer.getData(TREE_ITEM_TRANSFER_TYPE).trim();
+  if (customName) return customName;
+  return e.dataTransfer.getData(PLAIN_TEXT_TRANSFER_TYPE).trim();
 };
 
 /**
@@ -500,6 +562,12 @@ const onQueryEditorDragLeave = (e: DragEvent) => {
  * @param e ドラッグイベント
  */
 const onQueryEditorDragOver = (e: DragEvent) => {
+  if (isTreeItemDragEvent(e)) {
+    e.stopPropagation(); // Monacoの内部dragoverハンドラに伝播させず、dnd-drag-over状態に入らせない
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+    setQueryDropState(false);
+    return;
+  }
   if (!isFileDragEvent(e)) return;
   const canDrop = hasSupportedSqlFile(e);
   setQueryDropState(true, !canDrop);
@@ -513,6 +581,16 @@ const onQueryEditorDragOver = (e: DragEvent) => {
  * @param e ドラッグイベント
  */
 const onQueryEditorDrop = (e: DragEvent) => {
+  if (isTreeItemDragEvent(e)) {
+    e.stopPropagation(); // Monacoのdropハンドラに伝播させない
+    queryDragDepth = 0;
+    setQueryDropState(false);
+    const droppedText = getDraggedTreeItemName(e);
+    if (!droppedText) return;
+    insertTextAtClientPoint(droppedText, e.clientX, e.clientY);
+    return;
+  }
+
   queryDragDepth = 0;
   setQueryDropState(false);
   const dropped = Array.from(e.dataTransfer?.files ?? []).filter(f => SQL_FILE_NAME_PATTERN.test(f.name));
@@ -536,6 +614,7 @@ defineExpose({
   closeQueryTab,
   getActiveQuery,
   setActiveQuery,
+  appendActiveQuery,
   addResultTab,
   clearResultTabs,
   setMessages,

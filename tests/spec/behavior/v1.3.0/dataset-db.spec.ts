@@ -40,8 +40,9 @@ test.describe('dataset DB', () => {
     await expect(page.locator('#dataset-tree')).toContainText('test_dataset');
     await expect(page.locator('#db-tree')).not.toContainText(/^dataset$/);
 
+    await fillSqlEditor(page, 'SELECT 999;');
     await page.locator('#dataset-tree .tree-label.dataset', { hasText: 'test_dataset' }).click();
-    expect(await getSqlEditorValue(page)).toMatch(/SELECT \* FROM dataset\.?"?test_dataset"? LIMIT 100/i);
+    expect(await getSqlEditorValue(page)).toBe('SELECT 999;');
     await expect(page.locator('.result-tab', { hasText: 'test_dataset' })).toHaveCount(0);
 
     await page.reload();

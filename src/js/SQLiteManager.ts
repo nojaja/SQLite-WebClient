@@ -449,12 +449,13 @@ class SQLiteManager {
    */
   getDatabaseSchema(schemaName = 'main') {
     const sql = `SELECT type, name FROM "${schemaName}".sqlite_master WHERE type IN ('table','view','index','trigger') ORDER BY type,name`;
-    const schema: { alias: string; tables: string[]; views: string[]; indexes: string[]; triggers: string[] } = {
+    const schema: { alias: string; tables: string[]; views: string[]; indexes: string[]; triggers: string[]; tableColumns: Record<string, string[]> } = {
       alias: schemaName,
       tables: [],
       views: [],
       indexes: [],
-      triggers: []
+      triggers: [],
+      tableColumns: {}
     };
     try {
       const [rows] = this.db.exec(sql);
@@ -467,10 +468,35 @@ class SQLiteManager {
         if (type === 'index') schema.indexes.push(name);
         if (type === 'trigger') schema.triggers.push(name);
       });
+
+      schema.tables.forEach((tableName) => {
+        schema.tableColumns[tableName] = this.getSchemaTableColumns(schemaName, tableName);
+      });
     } catch {
       return schema;
     }
     return schema;
+  }
+
+  /**
+   * 指定スキーマ配下のテーブルカラム一覧を取得する
+   * @param schemaName スキーマ名
+   * @param tableName テーブル名
+   * @returns カラム名配列
+   */
+  private getSchemaTableColumns(schemaName: string, tableName: string): string[] {
+    const schemaIdentifier = SQLiteManager.quoteIdentifier(schemaName);
+    const tableLiteral = SQLiteManager.quoteLiteral(tableName);
+    const sql = `SELECT name FROM ${schemaIdentifier}.pragma_table_info(${tableLiteral}) ORDER BY cid`;
+    try {
+      const [rows] = this.db.exec(sql);
+      if (!rows?.values) return [];
+      return rows.values
+        .map((vals: unknown[]) => vals[0])
+        .filter((name): name is string => typeof name === 'string');
+    } catch {
+      return [];
+    }
   }
 
   /**

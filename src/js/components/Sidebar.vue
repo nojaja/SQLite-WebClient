@@ -62,19 +62,62 @@
                   {{ group.title }}
                 </div>
                 <div class="tree-items" :style="{ display: groupNodeOpen[`${schema.alias}__${group.title}`] ? '' : 'none' }">
-                  <div v-for="name in group.items" :key="name" class="tree-item">
-                    <div
-                      class="tree-label"
-                      :class="group.title"
-                      :data-name="name"
-                      :data-db-alias="schema.alias"
-                      @contextmenu.prevent="onDbObjectContextMenu($event, schema.alias, group.title, name)"
-                      @click="onTableClick(name, schema.alias)"
-                    >
-                      <span class="material-symbols-outlined icon">{{ group.icon }}</span>
-                      {{ name }}
+                  <template v-if="group.title === 'Tables'">
+                    <div v-for="name in group.items" :key="name" class="tree-item">
+                      <div
+                        class="tree-label Tables"
+                        :data-name="name"
+                        :data-table-name="name"
+                        :data-db-alias="schema.alias"
+                        draggable="true"
+                        @dragstart="onTreeItemDragStart($event, name)"
+                        @click="toggleTableColumnsNode(schema.alias, name)"
+                        @contextmenu.prevent="onTableContextMenu($event, schema.alias, name, getTableColumns(schema.alias, name))"
+                      >
+                        <span class="material-symbols-outlined toggle-icon">
+                          {{ tableColumnNodeOpen[`${schema.alias}__${name}`] ? 'expand_more' : 'chevron_right' }}
+                        </span>
+                        <span class="material-symbols-outlined icon">{{ group.icon }}</span>
+                        {{ name }}
+                      </div>
+                      <div class="tree-items" :style="{ display: tableColumnNodeOpen[`${schema.alias}__${name}`] ? '' : 'none' }">
+                        <div
+                          v-for="columnName in getTableColumns(schema.alias, name)"
+                          :key="`${schema.alias}__${name}__${columnName}`"
+                          class="tree-item"
+                        >
+                          <div
+                            class="tree-label Columns"
+                            :data-db-alias="schema.alias"
+                            :data-table-name="name"
+                            :data-column-name="columnName"
+                            draggable="true"
+                            @dragstart="onTreeItemDragStart($event, columnName)"
+                            @contextmenu.prevent="onColumnContextMenu($event, schema.alias, name, columnName, getTableColumns(schema.alias, name))"
+                          >
+                            <span class="material-symbols-outlined icon">view_column</span>
+                            {{ columnName }}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  </template>
+                  <template v-else>
+                    <div v-for="name in group.items" :key="name" class="tree-item">
+                      <div
+                        class="tree-label"
+                        :class="group.title"
+                        :data-name="name"
+                        :data-db-alias="schema.alias"
+                        draggable="true"
+                        @dragstart="onTreeItemDragStart($event, name)"
+                        @contextmenu.prevent="onDbObjectContextMenu($event, schema.alias, group.title, name)"
+                      >
+                        <span class="material-symbols-outlined icon">{{ group.icon }}</span>
+                        {{ name }}
+                      </div>
+                    </div>
+                  </template>
                 </div>
               </div>
             </template>
@@ -112,7 +155,9 @@
               :data-name="name"
               :data-dataset-table-name="name"
               style="display:flex;align-items:center;gap:4px"
-              @click="onDatasetClick(name)"
+              draggable="true"
+              @dragstart="onTreeItemDragStart($event, name)"
+              @contextmenu.prevent="onDatasetTableContextMenu($event, name)"
             >
               <span class="material-symbols-outlined icon">dataset</span>
               {{ name }}
@@ -138,11 +183,44 @@
       :style="{ left: `${dbObjectContextMenu.x}px`, top: `${dbObjectContextMenu.y}px` }"
     >
       <button
+        v-if="canShowDdlMenu"
         id="db-object-show-ddl-menu"
         class="context-menu-item"
         @click.stop="onShowDdlMenuClick"
       >
-        DDLを表示
+        CREATE文の挿入
+      </button>
+      <button
+        v-if="canShowInsertQueryMenus"
+        id="db-object-insert-select-menu"
+        class="context-menu-item"
+        @click.stop="onInsertQueryMenuClick('select')"
+      >
+        Select文の挿入
+      </button>
+      <button
+        v-if="canShowInsertQueryMenus"
+        id="db-object-insert-update-menu"
+        class="context-menu-item"
+        @click.stop="onInsertQueryMenuClick('update')"
+      >
+        Update文の挿入
+      </button>
+      <button
+        v-if="canShowInsertQueryMenus"
+        id="db-object-insert-insert-menu"
+        class="context-menu-item"
+        @click.stop="onInsertQueryMenuClick('insert')"
+      >
+        Insert文の挿入
+      </button>
+      <button
+        v-if="canShowInsertQueryMenus"
+        id="db-object-insert-delete-menu"
+        class="context-menu-item"
+        @click.stop="onInsertQueryMenuClick('delete')"
+      >
+        Delete文の挿入
       </button>
     </div>
   </div>
@@ -150,7 +228,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue';
-import { buildSelectAllQuery, DATASET_DB_ALIAS } from '../datasetDb';
+import { formatIdentifier } from '../datasetDb';
 import { useSidebarRowSplitter } from '../composables/useSidebarRowSplitter';
 
 defineOptions({ name: 'AppSidebar' });
@@ -162,11 +240,13 @@ const emit = defineEmits<{
   'delete-dataset': [name: string];
   'drop-files': [files: File[]];
   'drop-datasets': [files: File[]];
-  'set-query': [query: string];
+  'append-query': [query: string];
   'show-ddl': [payload: { alias: string; name: string; objectType: DbObjectType }];
 }>();
 
-type DbObjectType = 'table' | 'view' | 'index' | 'trigger';
+type DbObjectType = 'table' | 'view' | 'index' | 'trigger' | 'column';
+type QueryInsertMenuAction = 'select' | 'update' | 'insert' | 'delete';
+type DbObjectContextSource = 'database' | 'dataset';
 
 // ---- Databases ツリー ----
 const dbTreeOpen = ref(true);
@@ -176,21 +256,31 @@ const dbSchemas = ref<Array<{
   views?: string[];
   indexes?: string[];
   triggers?: string[];
+  tableColumns?: Record<string, string[]>;
 }>>([]);
 const dbNodeOpen = reactive<Record<string, boolean>>({});
 const groupNodeOpen = reactive<Record<string, boolean>>({});
+const tableColumnNodeOpen = reactive<Record<string, boolean>>({});
 const dbObjectContextMenu = reactive<{
   visible: boolean;
   x: number;
   y: number;
+  source: DbObjectContextSource;
   alias: string;
+  tableName: string;
+  columnName: string;
+  columns: string[];
   name: string;
   objectType: DbObjectType;
 }>({
   visible: false,
   x: 0,
   y: 0,
+  source: 'database',
   alias: '',
+  tableName: '',
+  columnName: '',
+  columns: [],
   name: '',
   objectType: 'table'
 });
@@ -203,6 +293,7 @@ const groupTitleToObjectType: Record<string, DbObjectType> = {
 };
 const DB_FILE_NAME_PATTERN = /\.(db|sqlite|sqlite3|db3)$/i;
 const DATASET_FILE_NAME_PATTERN = /\.csv$/i;
+const TREE_ITEM_TRANSFER_TYPE = 'application/x-sqlite-webclient-tree-item-name';
 const isDbDropActive = ref(false);
 const isDbDropInvalid = ref(false);
 const isDatasetDropActive = ref(false);
@@ -400,6 +491,44 @@ const toggleGroupNode = (alias: string, title: string) => {
 };
 
 /**
+ * 処理名: テーブルカラムノード開閉トグル
+ * 処理概要: 指定テーブル配下のカラム一覧展開状態を切り替える
+ * 実装理由: テーブル配下にカラムツリーを持たせる要件に対応するため
+ * @param alias DB エイリアス
+ * @param tableName テーブル名
+ */
+const toggleTableColumnsNode = (alias: string, tableName: string) => {
+  const key = `${alias}__${tableName}`;
+  tableColumnNodeOpen[key] = !tableColumnNodeOpen[key];
+};
+
+/**
+ * 処理名: テーブルカラム一覧取得
+ * 処理概要: 指定エイリアス・テーブルのカラム名配列を返す
+ * 実装理由: ツリー描画時にカラムノード配列を取得するため
+ * @param alias DB エイリアス
+ * @param tableName テーブル名
+ * @returns カラム名配列
+ */
+const getTableColumns = (alias: string, tableName: string): string[] => {
+  const schema = dbSchemas.value.find(item => item.alias === alias);
+  return schema?.tableColumns?.[tableName] ?? [];
+};
+
+/**
+ * 処理名: ツリー項目ドラッグ開始
+ * 処理概要: ツリー項目名を DataTransfer にセットする
+ * 実装理由: エディタへの D&D で項目名を挿入するため
+ * @param e ドラッグイベント
+ * @param itemName 挿入対象の項目名
+ */
+const onTreeItemDragStart = (e: DragEvent, itemName: string) => {
+  if (!e.dataTransfer) return;
+  e.dataTransfer.effectAllowed = 'copy';
+  e.dataTransfer.setData(TREE_ITEM_TRANSFER_TYPE, itemName);
+};
+
+/**
  * 処理名: DBオブジェクト右クリックメニュー表示
  * 処理概要: Tables / Views / Indexes / Triggers の項目右クリックでメニューを開く
  * 実装理由: DDL表示アクションをコンテキストメニュー経由で提供するため
@@ -411,12 +540,123 @@ const toggleGroupNode = (alias: string, title: string) => {
 const onDbObjectContextMenu = (e: MouseEvent, alias: string, groupTitle: string, name: string) => {
   const objectType = groupTitleToObjectType[groupTitle];
   if (!objectType) return;
+  const columns = objectType === 'table' ? getTableColumns(alias, name) : [];
+  openDbObjectContextMenu(e, {
+    source: 'database',
+    alias,
+    name,
+    objectType,
+    tableName: objectType === 'table' ? name : '',
+    columnName: '',
+    columns,
+  });
+};
+
+/**
+ * 処理名: テーブル右クリックメニュー表示
+ * 処理概要: テーブル項目右クリック時にコンテキストメニューを開く
+ * 実装理由: テーブル向け SQL 挿入メニューを表示するため
+ * @param e マウスイベント
+ * @param alias DBエイリアス
+ * @param tableName テーブル名
+ * @param columns テーブルの全カラム配列
+ */
+const onTableContextMenu = (e: MouseEvent, alias: string, tableName: string, columns: string[]) => {
+  openDbObjectContextMenu(e, {
+    source: 'database',
+    alias,
+    name: tableName,
+    objectType: 'table',
+    tableName,
+    columnName: '',
+    columns,
+  });
+};
+
+/**
+ * 処理名: カラム右クリックメニュー表示
+ * 処理概要: カラム項目右クリック時にコンテキストメニューを開く
+ * 実装理由: カラム単位 SQL 挿入メニューを表示するため
+ * @param e マウスイベント
+ * @param alias DBエイリアス
+ * @param tableName テーブル名
+ * @param columnName カラム名
+ * @param columns テーブルの全カラム配列
+ */
+const onColumnContextMenu = (
+  e: MouseEvent,
+  alias: string,
+  tableName: string,
+  columnName: string,
+  columns: string[]
+) => {
+  openDbObjectContextMenu(e, {
+    source: 'database',
+    alias,
+    name: columnName,
+    objectType: 'column',
+    tableName,
+    columnName,
+    columns,
+  });
+};
+
+/**
+ * 処理名: データセットテーブル右クリックメニュー表示
+ * 処理概要: データセットツリー項目右クリック時に SQL 挿入メニューを開く
+ * 実装理由: データセットテーブル向けの CRUD 文挿入を提供するため
+ * @param e マウスイベント
+ * @param tableName テーブル名
+ */
+const onDatasetTableContextMenu = (e: MouseEvent, tableName: string) => {
+  openDbObjectContextMenu(e, {
+    source: 'dataset',
+    alias: 'dataset',
+    name: tableName,
+    objectType: 'table',
+    tableName,
+    columnName: '',
+    columns: [],
+  });
+};
+
+/**
+ * 処理名: DBオブジェクト右クリックメニュー内部表示
+ * 処理概要: コンテキストメニューの表示情報を更新する
+ * 実装理由: テーブル/カラム/その他オブジェクトで同一表示処理を共通化するため
+ * @param e マウスイベント
+ * @param payload メニュー対象情報
+ * @param payload.source メニュー対象の出所（DBツリー/データセットツリー）
+ * @param payload.alias DBエイリアス
+ * @param payload.name 対象名
+ * @param payload.objectType オブジェクト種別
+ * @param payload.tableName テーブル名
+ * @param payload.columnName カラム名
+ * @param payload.columns テーブルの全カラム配列
+ */
+const openDbObjectContextMenu = (
+  e: MouseEvent,
+  payload: {
+    source: DbObjectContextSource;
+    alias: string;
+    name: string;
+    objectType: DbObjectType;
+    tableName: string;
+    columnName: string;
+    columns: string[];
+  }
+) => {
   dbObjectContextMenu.visible = true;
   dbObjectContextMenu.x = e.clientX;
   dbObjectContextMenu.y = e.clientY;
-  dbObjectContextMenu.alias = alias;
-  dbObjectContextMenu.name = name;
-  dbObjectContextMenu.objectType = objectType;
+  dbObjectContextMenu.source = payload.source;
+  dbObjectContextMenu.alias = payload.alias;
+  dbObjectContextMenu.name = payload.name;
+  dbObjectContextMenu.objectType = payload.objectType;
+  dbObjectContextMenu.tableName = payload.tableName;
+  dbObjectContextMenu.columnName = payload.columnName;
+  dbObjectContextMenu.columns = payload.columns;
+  updateContextMenuVisibilityFlags();
 };
 
 /**
@@ -426,6 +666,35 @@ const onDbObjectContextMenu = (e: MouseEvent, alias: string, groupTitle: string,
  */
 const closeDbObjectContextMenu = () => {
   dbObjectContextMenu.visible = false;
+  canShowDdlMenu.value = false;
+  canShowInsertQueryMenus.value = false;
+};
+
+/**
+ * 処理名: DDLメニュー表示可否判定
+ * 処理概要: 現在の右クリック対象で DDL 表示メニューを出すべきか判定する
+ * 実装理由: カラムノードでは DDL 取得ができないため非表示にするため
+ */
+const canShowDdlMenu = ref(false);
+
+/**
+ * 処理名: クエリ挿入メニュー表示可否判定
+ * 処理概要: 現在の右クリック対象で SQL 挿入メニューを出すべきか判定する
+ * 実装理由: テーブルまたはカラム以外では SQL 挿入メニューを非表示にするため
+ */
+const canShowInsertQueryMenus = ref(false);
+
+/**
+ * 処理名: コンテキストメニュー表示可否更新
+ * 処理概要: 対象オブジェクト種別に応じたメニュー表示可否を更新する
+ * 実装理由: メニュー描画条件を一箇所で管理するため
+ */
+const updateContextMenuVisibilityFlags = () => {
+  canShowDdlMenu.value = dbObjectContextMenu.source === 'database' && dbObjectContextMenu.objectType !== 'column';
+  canShowInsertQueryMenus.value =
+    dbObjectContextMenu.source === 'dataset'
+    || dbObjectContextMenu.objectType === 'table'
+    || dbObjectContextMenu.objectType === 'column';
 };
 
 /**
@@ -434,11 +703,134 @@ const closeDbObjectContextMenu = () => {
  * 実装理由: DDL 取得と表示を親コンポーネントに委譲するため
  */
 const onShowDdlMenuClick = () => {
+  if (dbObjectContextMenu.objectType === 'column') {
+    closeDbObjectContextMenu();
+    return;
+  }
   emit('show-ddl', {
     alias: dbObjectContextMenu.alias,
     name: dbObjectContextMenu.name,
-    objectType: dbObjectContextMenu.objectType
+    objectType: dbObjectContextMenu.objectType as 'table' | 'view' | 'index' | 'trigger'
   });
+  closeDbObjectContextMenu();
+};
+
+/**
+ * 処理名: 識別子リスト組み立て
+ * 処理概要: カラム名配列を識別子フォーマットしてカンマ連結する
+ * 実装理由: 各 SQL 生成で同一のカラム組み立てを再利用するため
+ * @param columns カラム名配列
+ * @returns カンマ連結済み識別子リスト
+ */
+const buildColumnList = (columns: string[]): string => columns.map(column => formatIdentifier(column)).join(', ');
+
+/**
+ * 処理名: テーブル完全修飾名生成
+ * 処理概要: エイリアス付きのテーブル識別子を組み立てる
+ * 実装理由: SQL 生成時に schema.table 形式を一貫して扱うため
+ * @param alias DB エイリアス
+ * @param tableName テーブル名
+ * @returns 完全修飾テーブル識別子
+ */
+const buildQualifiedTableName = (alias: string, tableName: string): string => {
+  if (!alias || alias === 'main') {
+    return formatIdentifier(tableName);
+  }
+  return `${formatIdentifier(alias)}.${formatIdentifier(tableName)}`;
+};
+
+/**
+ * 処理名: 対象カラム配列取得
+ * 処理概要: 右クリック対象に応じて SQL 生成対象カラム配列を返す
+ * 実装理由: テーブル操作は全カラム、カラム操作は対象カラムの要件を満たすため
+ * @returns 対象カラム名配列
+ */
+const resolveTargetColumns = (): string[] => {
+  if (dbObjectContextMenu.objectType === 'column') {
+    return dbObjectContextMenu.columnName ? [dbObjectContextMenu.columnName] : [];
+  }
+  return dbObjectContextMenu.columns;
+};
+
+/**
+ * 処理名: SELECT文生成
+ * 処理概要: 対象テーブル/カラム向けの SELECT 文を生成する
+ * 実装理由: メニュー操作でエディタに追記する SQL を生成するため
+ * @returns SQL 文字列
+ */
+const buildSelectQuery = (): string => {
+  const tableName = buildQualifiedTableName(dbObjectContextMenu.alias, dbObjectContextMenu.tableName || dbObjectContextMenu.name);
+  const columns = resolveTargetColumns();
+  const projection = columns.length > 0 ? buildColumnList(columns) : '*';
+  return `SELECT ${projection} FROM ${tableName} LIMIT 100;`;
+};
+
+/**
+ * 処理名: UPDATE文生成
+ * 処理概要: 対象テーブル/カラム向けの UPDATE 文を生成する
+ * 実装理由: メニュー操作で編集用 SQL のひな形を提供するため
+ * @returns SQL 文字列
+ */
+const buildUpdateQuery = (): string => {
+  const tableName = buildQualifiedTableName(dbObjectContextMenu.alias, dbObjectContextMenu.tableName || dbObjectContextMenu.name);
+  const columns = resolveTargetColumns();
+  const assignments = (columns.length > 0 ? columns : ['column'])
+    .map(column => `${formatIdentifier(column)} = ?`)
+    .join(', ');
+  return `UPDATE ${tableName} SET ${assignments} WHERE ;`;
+};
+
+/**
+ * 処理名: INSERT文生成
+ * 処理概要: 対象テーブル/カラム向けの INSERT 文を生成する
+ * 実装理由: メニュー操作で挿入用 SQL のひな形を提供するため
+ * @returns SQL 文字列
+ */
+const buildInsertQuery = (): string => {
+  const tableName = buildQualifiedTableName(dbObjectContextMenu.alias, dbObjectContextMenu.tableName || dbObjectContextMenu.name);
+  const columns = resolveTargetColumns();
+  const targetColumns = columns.length > 0 ? columns : ['column'];
+  const columnClause = buildColumnList(targetColumns);
+  const valuesClause = targetColumns.map(() => '?').join(', ');
+  return `INSERT INTO ${tableName} (${columnClause}) VALUES (${valuesClause});`;
+};
+
+/**
+ * 処理名: DELETE文生成
+ * 処理概要: 対象テーブル/カラム向けの DELETE 文を生成する
+ * 実装理由: メニュー操作で削除用 SQL のひな形を提供するため
+ * @returns SQL 文字列
+ */
+const buildDeleteQuery = (): string => {
+  const tableName = buildQualifiedTableName(dbObjectContextMenu.alias, dbObjectContextMenu.tableName || dbObjectContextMenu.name);
+  if (dbObjectContextMenu.objectType === 'column' && dbObjectContextMenu.columnName) {
+    return `DELETE FROM ${tableName} WHERE ${formatIdentifier(dbObjectContextMenu.columnName)} = ?;`;
+  }
+  return `DELETE FROM ${tableName} WHERE ;`;
+};
+
+/**
+ * 処理名: メニュー種別別SQL生成
+ * 処理概要: メニュー種別に応じた SQL 文字列を生成する
+ * 実装理由: コンテキストメニューの SQL 挿入処理を一元化するため
+ * @param action メニュー種別
+ * @returns SQL 文字列
+ */
+const buildInsertMenuQuery = (action: QueryInsertMenuAction): string => {
+  if (action === 'select') return buildSelectQuery();
+  if (action === 'update') return buildUpdateQuery();
+  if (action === 'insert') return buildInsertQuery();
+  return buildDeleteQuery();
+};
+
+/**
+ * 処理名: SQL挿入メニュー選択
+ * 処理概要: 選択されたメニュー種別の SQL を生成して親へ通知する
+ * 実装理由: エディタ追記処理を親コンポーネントに委譲するため
+ * @param action メニュー種別
+ */
+const onInsertQueryMenuClick = (action: QueryInsertMenuAction) => {
+  emit('append-query', buildInsertMenuQuery(action));
   closeDbObjectContextMenu();
 };
 
@@ -517,27 +909,6 @@ const onDatasetTreeDrop = (e: DragEvent) => {
   setDatasetDropState(false);
   const dropped = Array.from(e.dataTransfer?.files ?? []).filter(f => DATASET_FILE_NAME_PATTERN.test(f.name));
   if (dropped.length) emit('drop-datasets', dropped);
-};
-
-/**
- * 処理名: テーブルクリックハンドラ
- * 処理概要: テーブルノードクリック時に SELECT * SQL を生成し親に渡す
- * 実装理由: テーブル選択でクエリエディタに SQL を挙入するため
- * @param name テーブル名
- * @param alias DB エイリアス
- */
-const onTableClick = (name: string, alias: string) => {
-  emit('set-query', buildSelectAllQuery(alias, name));
-};
-
-/**
- * 処理名: データセットクリックハンドラ
- * 処理概要: データセットノードクリック時に dataset スキーマの SELECT SQL を生成する
- * 実装理由: データセット選択時の SQL 生成を通常テーブルと共通化するため
- * @param name データセットテーブル名
- */
-const onDatasetClick = (name: string) => {
-  emit('set-query', buildSelectAllQuery(DATASET_DB_ALIAS, name));
 };
 
 // ---- 外部から呼び出す API ----

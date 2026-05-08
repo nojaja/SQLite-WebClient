@@ -20,7 +20,7 @@
                 @delete-dataset="handleDeleteDataset"
                 @drop-files="handleDbTreeDrop"
                 @drop-datasets="handleDatasetTreeDrop"
-                @set-query="handleSetQuery"
+                @append-query="handleAppendQuery"
                 @show-ddl="handleShowDdl"
             />
             <div class="splitter" ref="splitterEl"></div>
@@ -679,19 +679,19 @@ const handleDatasetTreeDrop = async (dropped: File[]) => {
 };
 
 /**
- * 処理名: クエリ設定ハンドラ
- * 処理概要: サイドバーから渡された SQL をエディタにセットする
- * 実装理由: テーブルクリック時にクエリをエディタに挿入するため
- * @param query 設定する SQL 文字列
+ * 処理名: クエリ追記ハンドラ
+ * 処理概要: サイドバーから渡された SQL をエディタ末尾に追記する
+ * 実装理由: ツリー項目のコンテキストメニュー操作で SQL を追記するため
+ * @param query 追記する SQL 文字列
  */
-const handleSetQuery = (query: string) => {
-    mainAreaRef.value?.setActiveQuery(query);
+const handleAppendQuery = (query: string) => {
+    mainAreaRef.value?.appendActiveQuery(query);
 };
 
 /**
- * 処理名: DDL表示ハンドラ
- * 処理概要: サイドバー右クリックメニューで選択された DB オブジェクトの DDL をエディタに設定する
- * 実装理由: テーブル/ビュー/インデックス/トリガー定義を素早く確認できるようにするため
+ * 処理名: CREATE文挿入ハンドラ
+ * 処理概要: サイドバー右クリックメニューで選択された DB オブジェクトの DDL をエディタ末尾へ追記する
+ * 実装理由: 既存クエリを保持したまま CREATE 文テンプレートを追加できるようにするため
  * @param payload DDL 表示対象情報
  * @param payload.alias 対象オブジェクトの DB エイリアス
  * @param payload.name 対象オブジェクト名
@@ -702,10 +702,10 @@ const handleShowDdl = async (payload: { alias: string; name: string; objectType:
         const dbInst = await getDb();
         const ddl = dbInst.getSchemaObjectDdl(payload.alias, payload.objectType, payload.name);
         const normalizedDdl = ddl.trim().endsWith(';') ? ddl.trim() : `${ddl.trim()};`;
-        mainAreaRef.value?.setActiveQuery(normalizedDdl);
-        showSuccess(`DDLを表示しました: ${payload.alias}.${payload.name}`);
+        mainAreaRef.value?.appendActiveQuery(normalizedDdl);
+        showSuccess(`CREATE文を挿入しました: ${payload.alias}.${payload.name}`);
     } catch (e) {
-        showError(`DDL表示失敗: ${(e as Error).message}`);
+        showError(`CREATE文挿入失敗: ${(e as Error).message}`);
     }
 };
 

@@ -125,14 +125,14 @@ test.describe('画面構成確認', () => {
     expect(await page.locator('#results-area').evaluate(el => window.getComputedStyle(el).display)).toBe('none');
   });
 
-  test('テーブルクリックでSQL設定と実行結果がResultsに表示される', async ({ page }) => {
+  test('テーブル右クリックメニューでSelect文を挿入して実行できる', async ({ page }) => {
     await page.click('#new-db-button');
     await expandDatabaseNode(page);
     await expandTreeGroup(page, 'Tables');
-    // 'test' テーブルをクリック
-    await page.locator('.tree-label.Tables[data-name="test"]').click();
-    // SQLエディタにクエリが設定される
-    expect(await getSqlEditorValue(page)).toBe('SELECT * FROM test LIMIT 100');
+    await fillSqlEditor(page, 'SELECT 0;');
+    await page.locator('.tree-label.Tables[data-name="test"]').click({ button: 'right' });
+    await page.click('#db-object-insert-select-menu');
+    expect(await getSqlEditorValue(page)).toMatch(/SELECT 0;\s*SELECT\s+col1,\s*col2\s+FROM\s+test\s+LIMIT\s+100;/i);
     // 実行ボタンをクリック
     await page.click('#run-button');
     // Resultsテーブルに少なくとも1行表示される
@@ -140,21 +140,16 @@ test.describe('画面構成確認', () => {
     expect(rowCount).toBeGreaterThan(0);
   });
 
-  test('新規queryで開いた2番目のタブでもテーブルクリックで実行結果がResultsに表示される', async ({ page }) => {
+  test('新規queryで開いた2番目のタブでもテーブルクリックではSQLが変化しない', async ({ page }) => {
     await page.click('#new-db-button');
     // 新規Queryで2番目のタブに切替
     await page.click('#new-query-button');
+    await fillSqlEditor(page, 'SELECT 1;');
     await expandDatabaseNode(page);
     await expandTreeGroup(page, 'Tables');
-    // テーブル 'test' をクリック
+    // テーブル 'test' をクリック（SQL変更はしない）
     await page.locator('.tree-label.Tables[data-name="test"]').click();
-    // SQLエディタにクエリが設定される
-    expect(await getSqlEditorValue(page)).toBe('SELECT * FROM test LIMIT 100');
-    // 実行ボタンをクリック
-    await page.click('#run-button');
-    // 2番目タブでResultsグリッドに行が表示される
-    const rows = await page.locator('#results-grid tbody tr').count();
-    expect(rows).toBeGreaterThan(0);
+    expect(await getSqlEditorValue(page)).toBe('SELECT 1;');
   });
 
   test('Views, Indexes, Triggersがツリービューに表示される', async ({ page }) => {

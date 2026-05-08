@@ -26,12 +26,34 @@ function registerServiceWorker(): void {
 	const serviceWorkerUrl = `/service-worker.js?v=${encodeURIComponent(__APP_VERSION__)}`;
 	void navigator.serviceWorker
 		.register(serviceWorkerUrl, { updateViaCache: 'none' })
-		.then((registration) => registration.update())
 		.catch(() => undefined);
 }
 
+/**
+ * 処理名: ローカル Service Worker 解除
+ *
+ * 処理概要:
+ * localhost で以前登録された Service Worker を解除する
+ *
+ * 実装理由:
+ * 開発環境で古い Service Worker 制御が残ると画面点滅やキャッシュ不整合が起きるため
+ *
+ * @returns {void}
+ */
+function cleanupLocalServiceWorkers(): void {
+	void navigator.serviceWorker
+		.getRegistrations()
+		.then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+		.catch(() => undefined);
+}
+
+const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 if ('serviceWorker' in navigator) {
-	window.addEventListener('load', registerServiceWorker);
+	if (isLocalhost) {
+		window.addEventListener('load', cleanupLocalServiceWorkers);
+	} else {
+		window.addEventListener('load', registerServiceWorker);
+	}
 }
 
 
