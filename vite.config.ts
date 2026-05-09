@@ -1,6 +1,5 @@
 import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
@@ -49,70 +48,74 @@ const fsMock = (): Plugin => ({
   }
 })
 
-export default defineConfig({
-  plugins: [
-    vue(),
-    nodePolyfills({
-      include: ['buffer', 'path'],
-      globals: { Buffer: true }
-    }),
-    fsMock(),
-    monacoEditorPlugin({
-      languageWorkers: ['editorWorkerService']
-    }),
-    serveSqliteWasm(),
-    viteStaticCopy({
-      targets: [
-        {
-          src: 'node_modules/@sqlite.org/sqlite-wasm/sqlite-wasm/jswasm/sqlite3.wasm',
-          dest: './'
-        },
-        { src: 'src/pwa/manifest.webmanifest', dest: './' },
-        { src: 'src/pwa/service-worker.js', dest: './' },
-        { src: 'src/assets/pwa/icon-192.png', dest: './' },
-        { src: 'src/assets/pwa/icon-512.png', dest: './' },
-        { src: 'src/assets/pwa/apple-touch-icon.png', dest: './' },
-        { src: 'src/assets/pwa/favicon.ico', dest: './' }
-      ]
-    })
-  ],
-  define: {
-    __APP_VERSION__: JSON.stringify(pkg.version)
-  },
-  resolve: {
-    alias: {
-      'vue$': 'vue/dist/vue.esm-bundler.js'
-    }
-  },
-  server: {
-    port: 9000,
-    open: false,
-    headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp'
-    }
-  },
-  preview: {
-    port: 9000,
-    headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp'
-    }
-  },
-  build: {
-    outDir: 'dist',
-    sourcemap: true,
-    target: 'es2020',
-    chunkSizeWarningLimit: 2000,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          'monaco-editor': ['monaco-editor']
+export default defineConfig(async () => {
+  const { viteStaticCopy } = await import('vite-plugin-static-copy')
+
+  return {
+    plugins: [
+      vue(),
+      nodePolyfills({
+        include: ['buffer', 'path'],
+        globals: { Buffer: true }
+      }),
+      fsMock(),
+      monacoEditorPlugin({
+        languageWorkers: ['editorWorkerService']
+      }),
+      serveSqliteWasm(),
+      viteStaticCopy({
+        targets: [
+          {
+            src: 'node_modules/@sqlite.org/sqlite-wasm/sqlite-wasm/jswasm/sqlite3.wasm',
+            dest: './'
+          },
+          { src: 'src/pwa/manifest.webmanifest', dest: './' },
+          { src: 'src/pwa/service-worker.js', dest: './' },
+          { src: 'src/assets/pwa/icon-192.png', dest: './' },
+          { src: 'src/assets/pwa/icon-512.png', dest: './' },
+          { src: 'src/assets/pwa/apple-touch-icon.png', dest: './' },
+          { src: 'src/assets/pwa/favicon.ico', dest: './' }
+        ]
+      })
+    ],
+    define: {
+      __APP_VERSION__: JSON.stringify(pkg.version)
+    },
+    resolve: {
+      alias: {
+        'vue$': 'vue/dist/vue.esm-bundler.js'
+      }
+    },
+    server: {
+      port: 9000,
+      open: false,
+      headers: {
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': 'require-corp'
+      }
+    },
+    preview: {
+      port: 9000,
+      headers: {
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': 'require-corp'
+      }
+    },
+    build: {
+      outDir: 'dist',
+      sourcemap: true,
+      target: 'es2020',
+      chunkSizeWarningLimit: 2000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'monaco-editor': ['monaco-editor']
+          }
         }
       }
+    },
+    optimizeDeps: {
+      exclude: ['@sqlite.org/sqlite-wasm']
     }
-  },
-  optimizeDeps: {
-    exclude: ['@sqlite.org/sqlite-wasm']
   }
 })
