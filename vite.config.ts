@@ -48,11 +48,11 @@ const fsMock = (): Plugin => ({
   }
 })
 
-export default defineConfig(async () => {
+export default defineConfig(async ({ command }) => {
   const { viteStaticCopy } = await import('vite-plugin-static-copy')
 
   return {
-    base: '/SQLite-WebClient/',
+    base: command === 'serve' ? '/' : '/SQLite-WebClient/',
     plugins: [
       vue(),
       nodePolyfills({
@@ -84,7 +84,8 @@ export default defineConfig(async () => {
     },
     resolve: {
       alias: {
-        'vue$': 'vue/dist/vue.esm-bundler.js'
+        'vue$': 'vue/dist/vue.esm-bundler.js',
+        'source-map-support': resolve('src/js/shims/sourceMapSupport.ts')
       }
     },
     server: {

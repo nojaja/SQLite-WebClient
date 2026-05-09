@@ -3,9 +3,29 @@ import { createApp } from 'vue';
 import App from './App.vue';
 import '../css/app.scss';
 import { registerSqlCompletionProvider } from './sqlCompletionProvider';
-// DataTables CSS は Results.ts でインポート済み
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
+import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
+import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
+import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
+import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 
 declare const __APP_VERSION__: string;
+
+(self as unknown as { MonacoEnvironment?: { getWorker: (_moduleId: string, label: string) => Worker } }).MonacoEnvironment = {
+  /**
+   * Selects a Monaco language worker instance from the requested label.
+   * @param _moduleId Monaco internal module id (unused).
+   * @param label Monaco language label.
+   * @returns Worker instance for the label.
+   */
+  getWorker(_moduleId: string, label: string): Worker {
+    if (label === 'json') return new jsonWorker();
+    if (label === 'css' || label === 'scss' || label === 'less') return new cssWorker();
+    if (label === 'html' || label === 'handlebars' || label === 'razor') return new htmlWorker();
+    if (label === 'typescript' || label === 'javascript') return new tsWorker();
+    return new editorWorker();
+  }
+};
 
 registerSqlCompletionProvider();
 
@@ -23,10 +43,10 @@ registerSqlCompletionProvider();
  * @returns {void}
  */
 function registerServiceWorker(): void {
-const serviceWorkerUrl = `${import.meta.env.BASE_URL}service-worker.js?v=${encodeURIComponent(__APP_VERSION__)}`;
-void navigator.serviceWorker
-.register(serviceWorkerUrl, { updateViaCache: 'none' })
-.catch(() => undefined);
+  const serviceWorkerUrl = `${import.meta.env.BASE_URL}service-worker.js?v=${encodeURIComponent(__APP_VERSION__)}`;
+  void navigator.serviceWorker
+    .register(serviceWorkerUrl, { updateViaCache: 'none' })
+    .catch(() => undefined);
 }
 
 /**
@@ -41,19 +61,19 @@ void navigator.serviceWorker
  * @returns {void}
  */
 function cleanupLocalServiceWorkers(): void {
-void navigator.serviceWorker
-.getRegistrations()
-.then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
-.catch(() => undefined);
+  void navigator.serviceWorker
+    .getRegistrations()
+    .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+    .catch(() => undefined);
 }
 
 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 if ('serviceWorker' in navigator) {
-if (isLocalhost) {
-window.addEventListener('load', cleanupLocalServiceWorkers);
-} else {
-window.addEventListener('load', registerServiceWorker);
-}
+  if (isLocalhost) {
+    window.addEventListener('load', cleanupLocalServiceWorkers);
+  } else {
+    window.addEventListener('load', registerServiceWorker);
+  }
 }
 
 
