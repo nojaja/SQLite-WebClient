@@ -1,5 +1,10 @@
 const CACHE_NAME = 'sqlite-webclient-v2';
-const APP_SHELL = ['/', '/index.html', '/main.bundle.js', '/manifest.webmanifest'];
+const APP_SCOPE = self.registration.scope;
+const APP_SHELL = [
+  APP_SCOPE,
+  new URL('index.html', APP_SCOPE).href,
+  new URL('manifest.webmanifest', APP_SCOPE).href
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

@@ -23,10 +23,10 @@ registerSqlCompletionProvider();
  * @returns {void}
  */
 function registerServiceWorker(): void {
-	const serviceWorkerUrl = `/service-worker.js?v=${encodeURIComponent(__APP_VERSION__)}`;
-	void navigator.serviceWorker
-		.register(serviceWorkerUrl, { updateViaCache: 'none' })
-		.catch(() => undefined);
+const serviceWorkerUrl = new URL(`service-worker.js?v=${encodeURIComponent(__APP_VERSION__)}`, import.meta.env.BASE_URL).href;
+void navigator.serviceWorker
+.register(serviceWorkerUrl, { updateViaCache: 'none' })
+.catch(() => undefined);
 }
 
 /**
@@ -41,19 +41,19 @@ function registerServiceWorker(): void {
  * @returns {void}
  */
 function cleanupLocalServiceWorkers(): void {
-	void navigator.serviceWorker
-		.getRegistrations()
-		.then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
-		.catch(() => undefined);
+void navigator.serviceWorker
+.getRegistrations()
+.then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+.catch(() => undefined);
 }
 
 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 if ('serviceWorker' in navigator) {
-	if (isLocalhost) {
-		window.addEventListener('load', cleanupLocalServiceWorkers);
-	} else {
-		window.addEventListener('load', registerServiceWorker);
-	}
+if (isLocalhost) {
+window.addEventListener('load', cleanupLocalServiceWorkers);
+} else {
+window.addEventListener('load', registerServiceWorker);
+}
 }
 
 
