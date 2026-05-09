@@ -23,7 +23,7 @@ registerSqlCompletionProvider();
  * @returns {void}
  */
 function registerServiceWorker(): void {
-const serviceWorkerUrl = new URL(`service-worker.js?v=${encodeURIComponent(__APP_VERSION__)}`, import.meta.env.BASE_URL).href;
+const serviceWorkerUrl = `${import.meta.env.BASE_URL}service-worker.js?v=${encodeURIComponent(__APP_VERSION__)}`;
 void navigator.serviceWorker
 .register(serviceWorkerUrl, { updateViaCache: 'none' })
 .catch(() => undefined);
