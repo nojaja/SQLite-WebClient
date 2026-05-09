@@ -51,7 +51,7 @@
                 <h3>Used Libraries and Licenses</h3>
                 <ul>
                     <li><a href="https://www.npmjs.com/package/@sqlite.org/sqlite-wasm" target="_blank">@sqlite.org/sqlite-wasm</a> (Apache-2.0)</li>
-                    <li><a href="https://www.npmjs.com/package/datatables.net-vue3" target="_blank">DataTables (Vue3)</a> (MIT)</li>
+                    <li><a href="https://www.npmjs.com/package/tabulator-tables" target="_blank">Tabulator</a> (MIT)</li>
                     <li><a href="https://www.npmjs.com/package/dbgate-query-splitter" target="_blank">dbgate-query-splitter</a> (MIT)</li>
                 </ul>
                 <button @click="showHelpModal = false">閉じる</button>

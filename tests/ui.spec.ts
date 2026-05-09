@@ -136,7 +136,7 @@ test.describe('画面構成確認', () => {
     // 実行ボタンをクリック
     await page.click('#run-button');
     // Resultsテーブルに少なくとも1行表示される
-    const rowCount = await page.locator('#results-grid tbody tr').count();
+    const rowCount = await page.locator('#results-grid .tabulator-row').count();
     expect(rowCount).toBeGreaterThan(0);
   });
 
@@ -197,7 +197,7 @@ test.describe('画面構成確認', () => {
     await page.click('#new-db-button');
     await fillSqlEditor(page, 'SELECT * FROM test;');
     await page.click('#run-button');
-    const rows = await page.locator('#results-grid tbody tr').count();
+    const rows = await page.locator('#results-grid .tabulator-row').count();
     expect(rows).toBeGreaterThanOrEqual(2);
   });
 

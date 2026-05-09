@@ -68,14 +68,11 @@
             :id="tab.resultsId"
             v-show="activeResultTabId === tab.id"
           >
-            <DataTable
+            <div
               v-if="hasResultGridData(tab.resultsId)"
-              :key="`${tab.resultsId}-${getResultGridData(tab.resultsId)?.renderKey ?? 0}`"
-              :data="getResultGridData(tab.resultsId)?.data ?? []"
-              :columns="(getResultGridData(tab.resultsId)?.columns ?? []).map(col => ({ data: col, title: col }))"
-              :options="dtOptions"
-              class="display"
-            />
+              :id="`tabulator-${tab.resultsId}`"
+              class="tabulator-host"
+            ></div>
           </div>
         </div>
         <div v-show="showResultsMenuBar" class="results-menu-bar">
@@ -101,17 +98,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, nextTick, onBeforeUnmount } from 'vue';
 import MonacoEditor from 'monaco-editor-vue3';
 import * as monaco from 'monaco-editor';
-import DataTable from 'datatables.net-vue3';
-import DataTablesCore from 'datatables.net-dt';
-import 'datatables.net-dt/css/dataTables.dataTables.min.css';
-import 'datatables.net-fixedheader-dt';
-import 'datatables.net-fixedheader-dt/css/fixedHeader.dataTables.min.css';
+import { TabulatorFull as Tabulator } from 'tabulator-tables';
+import 'tabulator-tables/dist/css/tabulator.min.css';
 import { useRowSplitter } from '../composables/useRowSplitter';
-
-DataTable.use(DataTablesCore);
 
 const emit = defineEmits<{
   'register-dataset': [];
@@ -242,38 +234,103 @@ const appendActiveQuery = (value: string) => {
 interface ResultData {
   columns: string[];
   data: Record<string, unknown>[];
-  renderKey: number;
 }
 
 const resultGridData = reactive<Map<string, ResultData>>(new Map());
 
-const dtOptions = {
-  paging: true,
-  searching: false,
-  info: false,
-  fixedHeader: false,
-  layout: { topStart: null, topEnd: null },
+const tabulatorInstances = reactive<Map<string, Tabulator>>(new Map());
+
+const tabulatorOptions = {
+  layout: 'fitDataStretch',
+  pagination: true,
+  paginationMode: 'local' as const,
+  paginationSize: 50,
+  selectableRows: false,
 };
 
-let dataTableRenderSerial = 0;
+/**
+ * 処理名: Tabulator表示要素取得
+ * 処理概要: 指定テーブルIDに対応するTabulator表示要素を返す
+ * 実装理由: 結果タブごとにTabulatorインスタンスを生成するため
+ * @param tableId 結果テーブル ID
+ * @returns Tabulator を描画する HTML 要素
+ */
+const getTabulatorHostElement = (tableId: string): HTMLElement | null => {
+  return document.getElementById(`tabulator-${tableId}`);
+};
+
+/**
+ * 処理名: Tabulator列定義生成
+ * 処理概要: 列名配列からTabulator用の列定義配列を生成する
+ * 実装理由: クエリ結果の列構成に応じて動的にテーブルを描画するため
+ * @param columns 列名配列
+ * @returns Tabulator 用列定義配列
+ */
+const buildTabulatorColumns = (columns: string[]) => {
+  return columns.map((column) => ({ title: column, field: column }));
+};
+
+/**
+ * 処理名: Tabulatorインスタンス破棄
+ * 処理概要: 指定テーブルIDのTabulatorインスタンスを破棄する
+ * 実装理由: タブ削除時や再描画時のメモリリークを防止するため
+ * @param tableId 結果テーブル ID
+ */
+const destroyTabulatorInstance = (tableId: string) => {
+  const instance = tabulatorInstances.get(tableId);
+  if (!instance) return;
+  instance.destroy();
+  tabulatorInstances.delete(tableId);
+};
+
+/**
+ * 処理名: Tabulator再描画
+ * 処理概要: 指定テーブルIDに対応するTabulatorを生成し結果データを反映する
+ * 実装理由: 列構成が変わるケースを確実に反映するため都度再生成を行う
+ * @param tableId 結果テーブル ID
+ */
+const renderTabulatorForTable = (tableId: string) => {
+  const hostElement = getTabulatorHostElement(tableId);
+  const tableData = resultGridData.get(tableId);
+  if (!hostElement || !tableData) return;
+
+  destroyTabulatorInstance(tableId);
+  const instance = new Tabulator(hostElement, {
+    ...tabulatorOptions,
+    columns: buildTabulatorColumns(tableData.columns),
+    data: tableData.data,
+  });
+  tabulatorInstances.set(tableId, instance);
+};
+
+/**
+ * 処理名: Tabulator再描画予約
+ * 処理概要: DOM更新完了後にTabulator描画処理を実行する
+ * 実装理由: タブ追加直後でも描画先要素を確実に取得するため
+ * @param tableId 結果テーブル ID
+ */
+const scheduleTabulatorRender = async (tableId: string) => {
+  await nextTick();
+  renderTabulatorForTable(tableId);
+};
+
+/**
+ * 処理名: Tabulator全破棄
+ * 処理概要: 保持中のTabulatorインスタンスを全て破棄する
+ * 実装理由: タブ全削除時およびコンポーネント破棄時の後始末を共通化するため
+ */
+const destroyAllTabulatorInstances = () => {
+  Array.from(tabulatorInstances.keys()).forEach(destroyTabulatorInstance);
+};
 
 /**
  * 処理名: 結果データ存在確認
  * 処理概要: 指定タブ ID に結果データが存在するか確認する
- * 実装理由: DataTable 描画前にデータの有無を判定するため
+ * 実装理由: Tabulator 描画前にデータの有無を判定するため
  * @param tableId 結果テーブル ID
  * @returns データが存在する場合 true
  */
 const hasResultGridData = (tableId: string): boolean => resultGridData.has(tableId);
-/**
- * 処理名: 結果データ取得
- * 処理概要: 指定タブ ID の結果データを返す
- * 実装理由: DataTable コンポーネントにデータを渡すため
- * @param tableId 結果テーブル ID
- * @returns 結果データオブジェクトまたは undefined
- */
-const getResultGridData = (tableId: string): ResultData | undefined => resultGridData.get(tableId);
-
 interface ResultTab {
   id: string;
   label: string;
@@ -319,6 +376,7 @@ const switchResultTab = (id: string) => {
 const removeResultTab = (id: string) => {
   const tab = resultTabs.value.find(t => t.id === id);
   if (!tab) return;
+  destroyTabulatorInstance(tab.resultsId);
   resultGridData.delete(tab.resultsId);
   const idx = resultTabs.value.findIndex(t => t.id === id);
   resultTabs.value.splice(idx, 1);
@@ -351,6 +409,7 @@ const addResultTab = (label: string, tableId: string) => {
  * 実装理由: 新規クエリ実行前に前回結果をクリアするため
  */
 const clearResultTabs = () => {
+  destroyAllTabulatorInstances();
   resultTabs.value.filter(t => t.closable).forEach(t => resultGridData.delete(t.resultsId));
   resultTabs.value = resultTabs.value.filter(t => t.id === 'messages-tab');
   showResultsArea.value = false;
@@ -375,8 +434,8 @@ const setMessages = (msg: string | string[]) => {
 // ---- 結果グリッドデータ管理 ----
 /**
  * 処理名: 結果グリッドデータ設定
- * 処理概要: 指定タブに結果データをセットし DataTable コンポーネントが自動描画する
- * 実装理由: クエリ結果をテーブルで表示するため DataTable にデータを渡す必要がある
+ * 処理概要: 指定タブに結果データをセットし Tabulator を描画する
+ * 実装理由: クエリ結果をタブ単位の Tabulator に反映するため
  * @param tableId 結果テーブル ID
  * @param data 結果データオブジェクト
  * @param data.columns 列名配列
@@ -393,8 +452,8 @@ const setResultGridData = (tableId: string, data: { columns: string[]; results: 
     return normalizedRow;
   });
 
-  const nextRenderKey = ++dataTableRenderSerial;
-  resultGridData.set(tableId, { columns, data: normalizedRows, renderKey: nextRenderKey });
+  resultGridData.set(tableId, { columns, data: normalizedRows });
+  void scheduleTabulatorRender(tableId);
 };
 
 /**
@@ -609,6 +668,10 @@ const queryEditorEl = ref<HTMLElement | null>(null);
 const getQueryEditorElement = (): HTMLElement | null => queryEditorEl.value;
 useRowSplitter(rowSplitterEl, getQueryEditorElement);
 
+onBeforeUnmount(() => {
+  destroyAllTabulatorInstances();
+});
+
 defineExpose({
   addQueryTab,
   closeQueryTab,
@@ -623,3 +686,7 @@ defineExpose({
   getCurrentResultData,
 });
 </script>
+
+
+
+
