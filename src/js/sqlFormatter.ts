@@ -15,7 +15,6 @@ export const formatSqlText = (text: string, eol = '\n'): string => {
       language: 'sql',
       tabWidth: 2,
       useTabs: false,
-      lineWidth: 80,
       keywordCase: 'upper',
     });
     return formatted.replace(/\r\n/g, eol).replace(/\n/g, eol);

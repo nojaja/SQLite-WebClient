@@ -49,47 +49,6 @@ interface Sqlite3Instance {
 }
 
 
-/** sqlite3 WASM ステートメント型 */
-interface Sqlite3Stmt {
-  getColumnNames: () => string[];
-  get: (i: number) => unknown;
-  pointer: unknown;
-  bind: (...args: unknown[]) => unknown;
-  _bind: (...args: unknown[]) => unknown;
-  _owner: SQLiteManager;
-  getRowAsObject: () => Record<string, unknown>;
-  getAsObject: () => Record<string, unknown>;
-  step: () => boolean;
-  reset: () => void;
-  finalize: () => void;
-}
-
-/** sqlite3 OO1 DB インスタンス */
-interface Sqlite3OoDb {
-  prepare: (sql: string) => Sqlite3Stmt;
-  exec: (args: { sql: string; bind?: unknown; rowMode?: string; callback?: (row: Record<string, unknown>) => void } | string, bind?: unknown) => Array<{ columns: string[]; values: unknown[][] }>;
-  close: () => void;
-}
-
-/** sqlite3 WASM CAPI サブセット */
-interface Sqlite3Capi {
-  sqlite3_js_vfs_create_file: (vfs: string, name: string, data: Uint8Array, size: number) => void;
-  sqlite3_js_db_export: (db: Sqlite3OoDb) => Uint8Array;
-  sqlite3_bind_parameter_index: (ptr: unknown, name: string) => number;
-}
-
-/** sqlite3 OO1 ファクトリー */
-interface Sqlite3Oo1 {
-  DB: new (filename: string, mode: string) => Sqlite3OoDb;
-}
-
-/** sqlite3 WASM インスタンス */
-interface Sqlite3Instance {
-  capi: Sqlite3Capi;
-  oo1: Sqlite3Oo1;
-}
-
-
 /**
  * SQLite WASM の初期化、接続管理、クエリ実行を担当するマネージャー。
  */
