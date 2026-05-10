@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div id="menu-bar" class="menu-bar">
     <div class="menu-group" id="file-group">
       <button id="new-db-button" class="menu-button" @click="$emit('new-db')">
@@ -27,6 +27,9 @@
       <button id="show-plan-button" class="menu-button" @click="$emit('show-query-plan')">
         <span class="material-symbols-outlined">account_tree</span> Query Plan
       </button>
+      <button id="format-query-button" class="menu-button" @click="$emit('format-query')">
+        <span class="material-symbols-outlined">format_list_bulleted</span> Format
+      </button>
     </div>
     <div class="menu-group" id="help-group">
       <button id="help-button" class="menu-button" @click="$emit('open-help')">
@@ -46,6 +49,7 @@ defineEmits<{
   'save-query': [];
   'run-query': [];
   'show-query-plan': [];
+  'format-query': [];
   'open-help': [];
 }>();
 </script>

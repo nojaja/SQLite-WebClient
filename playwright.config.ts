@@ -1,7 +1,9 @@
-import { defineConfig, devices } from '@playwright/test';
+﻿import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
+  testMatch: ['**/*.spec.ts'],
+  testIgnore: ['unit/**'],
   timeout: 30000,
   retries: process.env.CI ? 2 : 0,
   use: {
