@@ -140,6 +140,113 @@ test.describe('画面構成確認', () => {
     expect(rowCount).toBeGreaterThan(0);
   });
 
+  test('Results remain visible and runnable after opening single-table edit', async ({ page }) => {
+    await page.click('#new-db-button');
+
+    await fillSqlEditor(page, 'SELECT * FROM test;');
+    await page.click('#run-button');
+    await expect(page.locator('.result-tab', { hasText: 'Results' }).first()).toBeVisible();
+    await expect(page.locator('#results-grid .tabulator-row').first()).toBeVisible();
+
+    await expandDatabaseNode(page);
+    await expandTreeGroup(page, 'Tables');
+    await page.locator('.tree-label.Tables[data-name="test"]').click({ button: 'right' });
+    await page.click('#db-object-edit-table-data-menu');
+
+    await expect(page.locator('#editable-grid-container')).toBeVisible();
+    await expect(page.locator('.result-tab', { hasText: '単表編集: test' })).toBeVisible();
+
+    await page.locator('.result-tab', { hasText: 'Results' }).first().click();
+    await expect(page.locator('#results-grid .tabulator-row').first()).toBeVisible();
+
+    await fillSqlEditor(page, 'SELECT 1 as x;');
+    await page.click('#run-button');
+    await expect(page.locator('.result-tab', { hasText: 'Results' }).first()).toBeVisible();
+    await expect(page.locator('#results-grid .tabulator-row').first()).toBeVisible();
+  });
+
+  test('テーブル定義と単表編集を同時に開いて切り替えできる', async ({ page }) => {
+    await page.click('#new-db-button');
+    await expandDatabaseNode(page);
+    await expandTreeGroup(page, 'Tables');
+
+    await page.locator('.tree-label.Tables[data-name="test"]').click({ button: 'right' });
+    await page.click('#db-object-show-table-definition-menu');
+
+    await page.locator('.tree-label.Tables[data-name="test"]').click({ button: 'right' });
+    await page.click('#db-object-edit-table-data-menu');
+
+    const definitionTab = page.locator('.result-tab', { hasText: 'テーブル定義: test' });
+    const dataEditTab = page.locator('.result-tab', { hasText: '単表編集: test' });
+
+    await expect(definitionTab).toBeVisible();
+    await expect(dataEditTab).toBeVisible();
+
+    await definitionTab.click();
+    await expect(definitionTab).toHaveClass(/active/);
+
+    await dataEditTab.click();
+    await expect(dataEditTab).toHaveClass(/active/);
+  });
+
+  test.skip('単表編集で行選択しても行削除ボタンが非活性のまま（不具合再現）', async ({ page }) => {
+    await page.click('#new-db-button');
+    await expandDatabaseNode(page);
+    await expandTreeGroup(page, 'Tables');
+
+    await page.locator('.tree-label.Tables[data-name="test"]').click({ button: 'right' });
+    await page.click('#db-object-edit-table-data-menu');
+
+    const firstCell = page.locator('#editable-grid-container .tabulator-row .tabulator-cell').first();
+    await expect(firstCell).toBeVisible();
+    await firstCell.click();
+
+    const deleteButton = page.locator('[id^="delete-row-button-"]').first();
+    await expect(deleteButton).toBeDisabled();
+  });
+
+  test('単表編集で行選択後に行削除ボタンが活性になり削除できる', async ({ page }) => {
+    await page.click('#new-db-button');
+    await expandDatabaseNode(page);
+    await expandTreeGroup(page, 'Tables');
+
+    await page.locator('.tree-label.Tables[data-name="test"]').click({ button: 'right' });
+    await page.click('#db-object-edit-table-data-menu');
+
+    const rows = page.locator('#editable-grid-container .tabulator-row');
+    await expect(rows.first()).toBeVisible();
+    const beforeCount = await rows.count();
+
+    await rows.first().locator('.tabulator-cell').first().click();
+
+    const deleteButton = page.locator('[id^="delete-row-button-"]').first();
+    await expect(deleteButton).toBeEnabled();
+    await deleteButton.click();
+
+    await expect(rows).toHaveCount(beforeCount - 1);
+  });
+
+  test('単表編集で行削除後に「変更を戻す」ボタンが非活性のまま（不具合再現）', async ({ page }) => {
+    await page.click('#new-db-button');
+    await expandDatabaseNode(page);
+    await expandTreeGroup(page, 'Tables');
+
+    await page.locator('.tree-label.Tables[data-name="test"]').click({ button: 'right' });
+    await page.click('#db-object-edit-table-data-menu');
+
+    // 1行目を選択して削除
+    const rows = page.locator('#editable-grid-container .tabulator-row');
+    await expect(rows.first()).toBeVisible();
+    await rows.first().locator('.tabulator-cell').first().click();
+    const deleteButton = page.locator('[id^="delete-row-button-"]').first();
+    await expect(deleteButton).toBeEnabled();
+    await deleteButton.click();
+
+    // この時点で「変更を戻す」ボタンは活性化されているべきだが、現状は非活性
+    const undoButton = page.locator('[id^="undo-changes-button-"]').first();
+    await expect(undoButton).toBeEnabled(); // ここで失敗するはず
+  });
+
   test('新規queryで開いた2番目のタブでもテーブルクリックではSQLが変化しない', async ({ page }) => {
     await page.click('#new-db-button');
     // 新規Queryで2番目のタブに切替

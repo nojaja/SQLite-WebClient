@@ -183,6 +183,22 @@
       :style="{ left: `${dbObjectContextMenu.x}px`, top: `${dbObjectContextMenu.y}px` }"
     >
       <button
+        v-if="canShowTableSchemaMenu"
+        id="db-object-show-table-definition-menu"
+        class="context-menu-item"
+        @click.stop="onShowTableDefinitionMenuClick"
+      >
+        テーブル定義の表示
+      </button>
+      <button
+        v-if="canShowTableSchemaMenu"
+        id="db-object-edit-table-data-menu"
+        class="context-menu-item"
+        @click.stop="onEditTableDataMenuClick"
+      >
+        単表編集
+      </button>
+      <button
         v-if="canShowDdlMenu"
         id="db-object-show-ddl-menu"
         class="context-menu-item"
@@ -242,6 +258,8 @@ const emit = defineEmits<{
   'drop-datasets': [files: File[]];
   'append-query': [query: string];
   'show-ddl': [payload: { alias: string; name: string; objectType: DbObjectType }];
+  'show-table-definition': [payload: { alias: string; tableName: string }];
+  'edit-table-data': [payload: { alias: string; tableName: string }];
 }>();
 
 type DbObjectType = 'table' | 'view' | 'index' | 'trigger' | 'column';
@@ -668,7 +686,15 @@ const closeDbObjectContextMenu = () => {
   dbObjectContextMenu.visible = false;
   canShowDdlMenu.value = false;
   canShowInsertQueryMenus.value = false;
+  canShowTableSchemaMenu.value = false;
 };
+
+/**
+ * 処理名: テーブルスキーマメニュー表示可否判定
+ * 処理概要: 現在の右クリック対象がテーブルで、DBツリーのテーブル操作が可能か判定する
+ * 実装理由: テーブル定義表示と単表編集はテーブル専用機能のため
+ */
+const canShowTableSchemaMenu = ref(false);
 
 /**
  * 処理名: DDLメニュー表示可否判定
@@ -690,6 +716,8 @@ const canShowInsertQueryMenus = ref(false);
  * 実装理由: メニュー描画条件を一箇所で管理するため
  */
 const updateContextMenuVisibilityFlags = () => {
+  canShowTableSchemaMenu.value = 
+    dbObjectContextMenu.source === 'database' && dbObjectContextMenu.objectType === 'table';
   canShowDdlMenu.value = dbObjectContextMenu.source === 'database' && dbObjectContextMenu.objectType !== 'column';
   canShowInsertQueryMenus.value =
     dbObjectContextMenu.source === 'dataset'
@@ -711,6 +739,32 @@ const onShowDdlMenuClick = () => {
     alias: dbObjectContextMenu.alias,
     name: dbObjectContextMenu.name,
     objectType: dbObjectContextMenu.objectType as 'table' | 'view' | 'index' | 'trigger'
+  });
+  closeDbObjectContextMenu();
+};
+
+/**
+ * 処理名: テーブル定義表示メニュー選択
+ * 処理概要: テーブル定義を編集可能なグリッドで表示するイベントを発火する
+ * 実装理由: テーブルスキーマを表示・編集するため
+ */
+const onShowTableDefinitionMenuClick = () => {
+  emit('show-table-definition', {
+    alias: dbObjectContextMenu.alias,
+    tableName: dbObjectContextMenu.tableName
+  });
+  closeDbObjectContextMenu();
+};
+
+/**
+ * 処理名: 単表編集メニュー選択
+ * 処理概要: テーブル全行を編集可能なグリッドで表示するイベントを発火する
+ * 実装理由: テーブルデータを直接編集するため
+ */
+const onEditTableDataMenuClick = () => {
+  emit('edit-table-data', {
+    alias: dbObjectContextMenu.alias,
+    tableName: dbObjectContextMenu.tableName
   });
   closeDbObjectContextMenu();
 };

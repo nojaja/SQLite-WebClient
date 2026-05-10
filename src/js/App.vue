@@ -22,6 +22,8 @@
                 @drop-datasets="handleDatasetTreeDrop"
                 @append-query="handleAppendQuery"
                 @show-ddl="handleShowDdl"
+                @show-table-definition="handleShowTableDefinition"
+                @edit-table-data="handleEditTableData"
             />
             <div class="splitter" ref="splitterEl"></div>
             <MainArea
@@ -706,6 +708,42 @@ const handleShowDdl = async (payload: { alias: string; name: string; objectType:
         showSuccess(`CREATE文を挿入しました: ${payload.alias}.${payload.name}`);
     } catch (e) {
         showError(`CREATE文挿入失敗: ${(e as Error).message}`);
+    }
+};
+
+/**
+ * 処理名: テーブル定義表示ハンドラ
+ * 処理概要: Sidebar の「テーブル定義の表示」メニュー項目をクリック時の処理
+ * 実装理由: テーブルスキーマを編集可能グリッドで表示するため
+ * @param payload テーブル情報
+ * @param payload.alias DBエイリアス
+ * @param payload.tableName テーブル名
+ */
+const handleShowTableDefinition = async (payload: { alias: string; tableName: string }) => {
+    try {
+        const dbInst = await getDb();
+        mainAreaRef.value?.showTableDefinition(payload.alias, payload.tableName, dbInst);
+        showSuccess(`テーブル定義: ${payload.alias}.${payload.tableName}`);
+    } catch (e) {
+        showError(`テーブル定義表示失敗: ${(e as Error).message}`);
+    }
+};
+
+/**
+ * 処理名: テーブルデータ編集ハンドラ
+ * 処理概要: Sidebar の「単表編集」メニュー項目をクリック時の処理
+ * 実装理由: テーブルデータを編集可能グリッドで表示するため
+ * @param payload テーブル情報
+ * @param payload.alias DBエイリアス
+ * @param payload.tableName テーブル名
+ */
+const handleEditTableData = async (payload: { alias: string; tableName: string }) => {
+    try {
+        const dbInst = await getDb();
+        mainAreaRef.value?.editTableData(payload.alias, payload.tableName, dbInst);
+        showSuccess(`テーブル編集: ${payload.alias}.${payload.tableName}`);
+    } catch (e) {
+        showError(`テーブル編集表示失敗: ${(e as Error).message}`);
     }
 };
 

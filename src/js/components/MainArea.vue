@@ -57,32 +57,38 @@
           {{ tab.label }}
           <span v-if="tab.closable" class="close-tab" @click.stop="removeResultTab(tab.id)">×</span>
         </div>
+        <!-- 編集可能グリッドタブ -->
+        <div
+          v-for="tab in editableGridTabs"
+          :key="tab.id"
+          class="result-tab"
+          :class="{ active: activeResultTabId === tab.id }"
+          @click="switchResultTab(tab.id)"
+        >
+          {{ tab.label }}
+          <span class="close-tab" @click.stop="closeEditableGridTab(tab.id)">×</span>
+        </div>
       </div>
 
       <!-- 結果エリア -->
       <div id="results-area" class="results-area" :style="{ display: showResultsArea ? '' : 'none' }">
-        <div id="results-grid" class="results-grid">
-          <div
-            v-for="tab in resultTabs.filter(t => t.closable)"
-            :key="tab.resultsId"
-            :id="tab.resultsId"
-            v-show="activeResultTabId === tab.id"
-          >
-            <div
-              v-if="hasResultGridData(tab.resultsId)"
-              :id="`tabulator-${tab.resultsId}`"
-              class="tabulator-host"
-            ></div>
-          </div>
-        </div>
-        <div v-show="showResultsMenuBar" class="results-menu-bar">
-          <button id="register-dataset-btn" class="menu-button" @click="$emit('register-dataset')">
-            <span class="material-symbols-outlined">playlist_add</span> Register as Dataset
-          </button>
-          <button id="csv-download-button" class="menu-button" @click="$emit('download-csv')">
-            <span class="material-symbols-outlined">download</span> Download CSV
-          </button>
-        </div>
+        <NormalResultsPanel
+          :visible="isNormalResultsPanelVisible"
+          :result-tabs="resultTabs"
+          :active-result-tab-id="activeResultTabId"
+          :show-results-menu-bar="showResultsMenuBar"
+          :has-result-grid-data="hasResultGridData"
+          @register-dataset="$emit('register-dataset')"
+          @download-csv="$emit('download-csv')"
+        />
+        <EditableGridViewPanel
+          :visible="isEditableGridPanelVisible"
+          :editable-grid-tabs="editableGridTabs"
+          :active-result-tab-id="activeResultTabId"
+          @query-generated="onEditableGridQueryGenerated"
+          @update-query-generated="onEditableGridUpdateQueryGenerated"
+        />
+
       </div>
 
       <!-- メッセージエリア -->
@@ -104,6 +110,8 @@ import * as monaco from 'monaco-editor';
 import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import 'tabulator-tables/dist/css/tabulator.min.css';
 import { useRowSplitter } from '../composables/useRowSplitter';
+import EditableGridViewPanel from './EditableGridViewPanel.vue';
+import NormalResultsPanel from './NormalResultsPanel.vue';
 
 const emit = defineEmits<{
   'register-dataset': [];
@@ -169,7 +177,7 @@ const switchQueryTab = (id: string) => {
 
 /**
  * 処理名: クエリタブ閉じる
- * 処理概要: 指定 ID のクエリタブを削除し、必要に応じて隔隣タブにフォーカスを移す
+ * 処理概要: 指定 ID のクエリタブを削除し、必要に応じて隣接タブにフォーカスを移す
  * 実装理由: タブ閉じるボタン操作に対応するため
  * @param id 閉じるタブ ID
  */
@@ -416,6 +424,280 @@ const clearResultTabs = () => {
   showMessagesArea.value = true;
   showResultsMenuBar.value = false;
   activeResultTabId.value = 'messages-tab';
+};
+
+// ---- 編集可能グリッド管理 ----
+interface EditableGridState {
+  mode: 'table-definition' | 'table-data';
+  alias: string;
+  tableName: string;
+  columns: Array<{
+    title: string;
+    field: string;
+    editor?: string;
+    editorParams?: Record<string, unknown>;
+  }>;
+  data: Record<string, unknown>[];
+  primaryKeyField?: string;
+}
+
+interface EditableGridTab {
+  id: string;
+  label: string;
+  state: EditableGridState;
+}
+
+const editableGridTabs = ref<EditableGridTab[]>([]);
+
+const isEditableGridPanelVisible = computed(() =>
+  activeResultTabId.value.startsWith('editable-grid-tab-')
+);
+
+const isNormalResultsPanelVisible = computed(() => {
+  if (activeResultTabId.value === 'messages-tab') return false;
+  return !isEditableGridPanelVisible.value;
+});
+
+/**
+ * 処理名: 編集可能グリッドタブID生成
+ * 処理概要: モード/DB/テーブル名から一意な編集タブIDを生成する
+ * 実装理由: 同一画面で複数の編集可能グリッドを共存させるため
+ * @param state 編集可能グリッド状態
+ * @returns 編集可能グリッドタブID
+ */
+const buildEditableGridTabId = (state: EditableGridState): string => {
+  const modePrefix = state.mode === 'table-definition' ? 'def' : 'data';
+  return `editable-grid-tab-${modePrefix}-${state.alias}-${state.tableName}`;
+};
+
+/**
+ * 処理名: 編集可能グリッドタブ表示
+ * 処理概要: 編集タブを追加または更新してアクティブ化する
+ * 実装理由: テーブル定義表示と単表編集を同時に複数保持するため
+ * @param state 編集可能グリッド状態
+ */
+const openEditableGridTab = (state: EditableGridState): void => {
+  const id = buildEditableGridTabId(state);
+  const modeLabel = state.mode === 'table-definition' ? 'テーブル定義' : '単表編集';
+  const label = `${modeLabel}: ${state.tableName}`;
+  const index = editableGridTabs.value.findIndex((tab) => tab.id === id);
+
+  if (index >= 0) {
+    editableGridTabs.value[index] = { id, label, state };
+  } else {
+    editableGridTabs.value.push({ id, label, state });
+  }
+
+  showResultsArea.value = true;
+  showMessagesArea.value = false;
+  showResultsMenuBar.value = false;
+  activeResultTabId.value = id;
+};
+
+/**
+ * 処理名: 編集可能グリッドタブ閉じる
+ * 処理概要: 指定された編集可能グリッドタブを閉じる
+ * 実装理由: 編集タブを通常結果タブと同様に複数管理するため
+ * @param id 閉じるタブID
+ */
+const closeEditableGridTab = (id: string) => {
+  const index = editableGridTabs.value.findIndex((tab) => tab.id === id);
+  if (index === -1) return;
+
+  editableGridTabs.value.splice(index, 1);
+
+  if (activeResultTabId.value === id) {
+    const fallback = editableGridTabs.value[editableGridTabs.value.length - 1];
+    if (fallback) {
+      switchResultTab(fallback.id);
+      return;
+    }
+
+    const normalResultTabs = resultTabs.value.filter((tab) => tab.closable);
+    if (normalResultTabs.length > 0) {
+      switchResultTab(normalResultTabs[0].id);
+    } else {
+      switchResultTab('messages-tab');
+    }
+  }
+};
+
+/**
+ * 処理名: テーブル定義表示
+ * 処理概要: 指定テーブルのスキーマをDBから取得して編集可能グリッドで表示する
+ * 実装理由: Sidebar のテーブル右クリックメニュー「テーブル定義の表示」に対応するため
+ * @param alias DBエイリアス
+ * @param tableName テーブル名
+ * @param dbManager SQLiteManager インスタンス
+ */
+const showTableDefinition = async (alias: string, tableName: string, dbManager: any) => {
+  try {
+    // PRAGMA table_info(tableName) でテーブルスキーマを取得
+    const schemaPrefix = alias === 'main' ? '' : `${alias}.`;
+    const results = dbManager.db.exec(
+      `PRAGMA ${schemaPrefix ? `${alias}.` : ''}table_info(${tableName})`
+    );
+    
+    if (!results.length || !results[0].values) {
+      setMessages(`テーブル ${tableName} のスキーマ取得に失敗しました`);
+      return;
+    }
+
+    // PRAGMA table_info の戻り値は：[cid, name, type, notnull, dflt_value, pk]
+    const columns = results[0].values.map((row: unknown[]) => ({
+      cid: row[0],
+      name: row[1],
+      type: row[2],
+      notnull: row[3],
+      dflt_value: row[4],
+      pk: row[5]
+    }));
+
+    // Tabulator用の列定義を生成
+    const tabulatorColumns = [
+      { title: 'Field', field: 'name', editor: 'input' },
+      {
+        title: 'Type',
+        field: 'type',
+        editor: 'list',
+        editorParams: {
+          values: getSQLiteDataTypes(),
+          autocomplete: true,
+          listOnEmpty: true,
+          clearable: true,
+        },
+      },
+      {
+        title: 'NOT NULL',
+        field: 'notnull',
+        formatter: 'tickCross',
+        editor: 'tickCross',
+        hozAlign: 'center',
+        editorParams: {
+          trueValue: true,
+          falseValue: false,
+        },
+      },
+      { title: 'Default', field: 'dflt_value', editor: 'input' },
+      { title: 'Comment', field: 'comment', editor: 'input' }
+    ];
+
+    const gridData = columns.map((col: Record<string, unknown>) => ({
+      name: col.name,
+      type: col.type || 'TEXT',
+      notnull: col.notnull === 1,
+      dflt_value: col.dflt_value,
+      comment: '',
+      cid: col.cid,
+      pk: col.pk
+    }));
+
+    openEditableGridTab({
+      mode: 'table-definition',
+      alias,
+      tableName,
+      columns: tabulatorColumns,
+      data: gridData
+    });
+  } catch (error) {
+    setMessages(`テーブル定義取得エラー: ${error}`);
+  }
+};
+
+/**
+ * 処理名: テーブルデータ編集表示
+ * 処理概要: 指定テーブルの全データをDBから取得して編集可能グリッドで表示する
+ * 実装理由: Sidebar のテーブル右クリックメニュー「単表編集」に対応するため
+ * @param alias DBエイリアス
+ * @param tableName テーブル名
+ * @param dbManager SQLiteManager インスタンス
+ */
+const editTableData = async (alias: string, tableName: string, dbManager: any) => {
+  try {
+    // ROWIDを含めてデータ取得
+    const schemaPrefix = alias === 'main' ? '' : `${alias}.`;
+    const selectQuery = `SELECT rowid, * FROM ${schemaPrefix}${tableName}`;
+    
+    const results = dbManager.db.exec(selectQuery);
+    if (!results.length) {
+      setMessages(`テーブル ${tableName} のデータ取得に失敗しました`);
+      return;
+    }
+
+    const columns = results[0].columns;
+    const values = results[0].values;
+
+    // Tabulator用の列定義を生成
+    const tabulatorColumns = columns.map((colName: string) => ({
+      title: colName,
+      field: colName,
+      editor: colName === 'rowid' ? undefined : 'input',
+      cssClass: colName === 'rowid' ? 'rowid-column' : ''
+    }));
+
+    const gridData = values.map((row: unknown[]) =>
+      Object.fromEntries(columns.map((col: string, idx: number) => [col, row[idx]]))
+    );
+
+    openEditableGridTab({
+      mode: 'table-data',
+      alias,
+      tableName,
+      columns: tabulatorColumns,
+      data: gridData,
+      primaryKeyField: 'rowid'
+    });
+  } catch (error) {
+    setMessages(`テーブルデータ取得エラー: ${error}`);
+  }
+};
+
+/**
+ * 処理名: SQLite データ型一覧取得
+ * 処理概要: SQLiteで利用可能なデータ型の一覧を返す
+ * 実装理由: 編集可能グリッドの型セレクタに使用するため
+ * @returns SQLiteで利用可能な型名一覧
+ */
+const getSQLiteDataTypes = (): string[] => [
+  '',
+  'NULL', 'INTEGER', 'REAL', 'TEXT', 'BLOB',
+  'NUMERIC', 'BOOLEAN', 'DATE', 'TIME', 'DATETIME',
+  'DECIMAL', 'DOUBLE', 'FLOAT', 'CHAR', 'VARCHAR'
+];
+
+/**
+ * 処理名: 編集可能グリッド閉じる
+ * 処理概要: 編集可能グリッドを閉じて通常の結果表示に戻す
+ * 実装理由: グリッド表示の終了時に呼び出すため
+ */
+const closeEditableGrid = () => {
+  if (!activeResultTabId.value.startsWith('editable-grid-tab-')) {
+    switchResultTab('messages-tab');
+    return;
+  }
+  closeEditableGridTab(activeResultTabId.value);
+};
+
+/**
+ * 処理名: 編集可能グリッド クエリ生成ハンドラ
+ * 処理概要: EditableGridPanel からの query-generated イベントを処理
+ * 実装理由: 「クエリを生成」ボタンのクリック時にCREATE/INSERT文をエディタに追記するため
+ * @param query 生成されたクエリ
+ */
+const onEditableGridQueryGenerated = (query: string) => {
+  appendActiveQuery(query);
+  setMessages(`クエリを生成しました: ${query.split('\n')[0]}`);
+};
+
+/**
+ * 処理名: 編集可能グリッド 変更クエリ生成ハンドラ
+ * 処理概要: EditableGridPanel からの update-query-generated イベントを処理
+ * 実装理由: 「変更クエリを生成」ボタンのクリック時にUPDATE/ALTER文をエディタに追記するため
+ * @param query 生成されたクエリ
+ */
+const onEditableGridUpdateQueryGenerated = (query: string) => {
+  appendActiveQuery(query);
+  setMessages(`変更クエリを生成しました: ${query.split('\n')[0]}`);
 };
 
 // ---- メッセージ ----
@@ -684,6 +966,8 @@ defineExpose({
   switchResultTab,
   setResultGridData,
   getCurrentResultData,
+  showTableDefinition,
+  editTableData,
 });
 </script>
 
