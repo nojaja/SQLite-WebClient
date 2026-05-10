@@ -1,8 +1,9 @@
-import SQLiteManager from './SQLiteManager';
+﻿import SQLiteManager from './SQLiteManager';
 import { createApp } from 'vue';
 import App from './App.vue';
 import '../css/app.scss';
 import { registerSqlCompletionProvider } from './sqlCompletionProvider';
+import { registerSqlFormattingProvider } from './sqlFormatter';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
@@ -28,6 +29,7 @@ declare const __APP_VERSION__: string;
 };
 
 registerSqlCompletionProvider();
+registerSqlFormattingProvider();
 
 /**
  * 処理名: Service Worker 登録
@@ -82,3 +84,4 @@ const dbInitPromise: Promise<SQLiteManager> = SQLiteManager.initialize(null, { p
 (window as unknown as { __dbInitPromise: Promise<SQLiteManager> }).__dbInitPromise = dbInitPromise;
 
 createApp(App).mount('#app');
+

@@ -107,6 +107,7 @@
 import { ref, reactive, computed, nextTick, onBeforeUnmount } from 'vue';
 import MonacoEditor from 'monaco-editor-vue3';
 import * as monaco from 'monaco-editor';
+import { formatSqlText } from '../sqlFormatter';
 import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import 'tabulator-tables/dist/css/tabulator.min.css';
 import { useRowSplitter } from '../composables/useRowSplitter';
@@ -788,8 +789,43 @@ const onEditorMounted = (editor: monaco.editor.IStandaloneCodeEditor) => {
     keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
     run: runQueryShortcut,
   });
+  editor.addAction({
+    id: 'format-document-menu',
+    label: 'ドキュメントのフォーマット',
+    contextMenuGroupId: '1_modification',
+    /* eslint-disable-line jsdoc/require-jsdoc */run: () => {
+      formatQuery();
+    },
+  });
 };
 
+/**
+ * 処理名: SQL クエリフォーマット
+ * 処理概要: アクティブなエディタに対して SQL フォーマット機能を実行する
+ * 実装理由: App.vue の format-query イベントハンドラから呼び出されるため
+ */
+const formatQuery = () => {
+  const original = getActiveQuery();
+  const formatted = formatSqlText(original);
+  if (formatted !== original) {
+    setActiveQuery(formatted);
+  }
+};
+
+/**
+ * 処理名: コンテキストメニュー形式フォーマット実行
+ * 処理概要: Monacoの「ドキュメントのフォーマット」アクションを直接実行する
+ * 実装理由: テストからコンテキストメニューと同一経路を安定して呼び出すため
+ * @returns Promise<void>
+ */
+const runFormatMenuAction = async (): Promise<void> => {
+  const action = sqlEditorRef.value?.getAction('format-document-menu');
+  if (action) {
+    await action.run();
+    return;
+  }
+  formatQuery();
+};
 // ---- クエリエディタ D&D ----
 const SQL_FILE_NAME_PATTERN = /\.sql$/i;
 const TREE_ITEM_TRANSFER_TYPE = 'application/x-sqlite-webclient-tree-item-name';
@@ -968,9 +1004,7 @@ defineExpose({
   getCurrentResultData,
   showTableDefinition,
   editTableData,
+  formatQuery,
+  runFormatMenuAction,
 });
 </script>
-
-
-
-

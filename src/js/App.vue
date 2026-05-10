@@ -10,6 +10,7 @@
             @save-query="handleSaveQuery"
             @run-query="handleRunQuery"
             @show-query-plan="handleShowQueryPlan"
+            @format-query="handleFormatQuery"
         />
         <div class="main-layout">
             <Sidebar
@@ -524,6 +525,15 @@ const handleNewQuery = () => {
 };
 
 /**
+ * 処理名: SQL フォーマットハンドラ
+ * 処理概要: MainArea 側のフォーマット処理を呼び出す
+ * 実装理由: メニューの「Format」操作に対応するため
+ */
+const handleFormatQuery = () => {
+    mainAreaRef.value?.formatQuery?.();
+};
+
+/**
  * 処理名: SQL ファイルを開くハンドラ
  * 処理概要: .sql ファイルを読み込んでエディタに設定する
  * 実装理由: メニューの「Open Query」操作に対応するため
@@ -857,6 +867,13 @@ onMounted(async () => {
          * @param v 設定する SQL 文字列
          */
         setValue: (v: string) => { mainAreaRef.value?.setActiveQuery(v); },
+        /**
+         * コンテキストメニューのフォーマットアクションを実行する
+         * @returns Promise<void>
+         */
+        runFormatMenuAction: async () => {
+            await mainAreaRef.value?.runFormatMenuAction?.();
+        },
     };
     const dbInitPromise = (window as { __dbInitPromise?: Promise<SQLiteManager> }).__dbInitPromise;
     if (dbInitPromise) {
