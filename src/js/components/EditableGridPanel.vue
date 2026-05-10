@@ -138,8 +138,57 @@ const generateUpdateQueryTooltip = computed(() =>
  */
 const toSqlLiteral = (value: unknown): string => {
   if (value === null || value === undefined) return 'NULL';
-  if (typeof value === 'string') return `'${String(value).replace(/'/g, "''")}'`;
+  if (typeof value === 'string') return toSqlStringLiteral(value);
   return String(value);
+};
+
+/**
+ * 処理名: SQL文字列式生成
+ * 処理概要: 改行を含む文字列を SQLite の char() 連結式へ変換する
+ * 実装理由: 生成SQLの1文構造を維持しつつ改行文字を正確に保持するため
+ * @param value 変換対象文字列
+ * @returns SQL 文字列リテラルまたは連結式
+ */
+const toSqlStringLiteral = (value: string): string => {
+  const segments: string[] = [];
+  let buffer = '';
+
+  /**
+   * 処理名: テキスト断片確定
+   * 処理概要: バッファ済みテキストを SQL リテラル断片として配列に追加する
+   * 実装理由: 改行コード断片と通常文字断片を統一的に連結するため
+   */
+  const pushBuffer = () => {
+    if (buffer.length === 0) return;
+    segments.push(`'${buffer.replace(/'/g, "''")}'`);
+    buffer = '';
+  };
+
+  for (let index = 0; index < value.length; index += 1) {
+    const current = value[index];
+    if (current === '\r') {
+      pushBuffer();
+      if (value[index + 1] === '\n') {
+        segments.push('char(13)', 'char(10)');
+        index += 1;
+      } else {
+        segments.push('char(13)');
+      }
+      continue;
+    }
+
+    if (current === '\n') {
+      pushBuffer();
+      segments.push('char(10)');
+      continue;
+    }
+
+    buffer += current;
+  }
+
+  pushBuffer();
+  if (segments.length === 0) return "''";
+  return segments.join(' || ');
 };
 
 /**
@@ -234,6 +283,80 @@ const collectTableDataChanges = () => {
 };
 
 /**
+ * 処理名: テキストエリア改行挿入
+ * 処理概要: 現在のカーソル位置または選択範囲に改行文字を挿入する
+ * 実装理由: 編集確定を維持しつつ Ctrl+Enter / Shift+Enter で改行入力を可能にするため
+ * @param textarea 対象テキストエリア
+ */
+const insertLineBreakAtSelection = (textarea: HTMLTextAreaElement): void => {
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const current = textarea.value;
+  textarea.value = `${current.slice(0, start)}\n${current.slice(end)}`;
+  const nextCaret = start + 1;
+  textarea.selectionStart = nextCaret;
+  textarea.selectionEnd = nextCaret;
+};
+
+/**
+ * 処理名: 複数行テキストセルエディタ
+ * 処理概要: Tabulator の input エディタを置き換える textarea エディタを提供する
+ * 実装理由: 文字列カラム編集時に改行を保持し、Ctrl+Enter/Shift+Enter で改行入力できるようにするため
+ * @param cell Tabulator セル
+ * @param onRendered エディタ描画後コールバック
+ * @param success 編集確定コールバック
+ * @param cancel 編集キャンセルコールバック
+ * @returns Tabulator に渡すエディタ要素
+ */
+const createMultilineTextEditor = (
+  cell: unknown,
+  onRendered: (callback: () => void) => void,
+  success: (value: string) => void,
+  cancel: () => void,
+): HTMLTextAreaElement => {
+  const editorElement = document.createElement('textarea');
+  editorElement.className = 'tabulator-multiline-editor';
+  editorElement.style.width = '100%';
+  editorElement.style.height = '100%';
+  editorElement.style.boxSizing = 'border-box';
+  editorElement.style.resize = 'vertical';
+  const initialValue = (cell as { getValue?: () => unknown }).getValue?.() ?? '';
+  editorElement.value = String(initialValue);
+
+  onRendered(() => {
+    editorElement.focus();
+    editorElement.selectionStart = editorElement.value.length;
+    editorElement.selectionEnd = editorElement.value.length;
+  });
+
+  editorElement.addEventListener('blur', () => {
+    success(editorElement.value);
+  });
+
+  editorElement.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      cancel();
+      return;
+    }
+
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey || event.shiftKey)) {
+      event.preventDefault();
+      event.stopPropagation();
+      insertLineBreakAtSelection(editorElement);
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      success(editorElement.value);
+    }
+  });
+
+  return editorElement;
+};
+
+/**
  * 処理名: Tabulator初期化
  * 処理概要: Tabulatorインスタンスを生成し、グリッドを描画する
  * 実装理由: コンポーネントマウント時にグリッドを初期化するため
@@ -245,13 +368,32 @@ const initializeTabulatorInstance = () => {
   // オリジナルデータを保存
   originalData.value = JSON.parse(JSON.stringify(props.data));
 
+  const columns = props.columns.map((column) => {
+    const resolvedColumn = column as typeof column & {
+      formatter?: string;
+      variableHeight?: boolean;
+      editor?: string | ((
+        cell: unknown,
+        onRendered: (callback: () => void) => void,
+        success: (value: string) => void,
+        cancel: () => void,
+      ) => HTMLTextAreaElement);
+    };
+    return {
+      ...column,
+      formatter: resolvedColumn.formatter ?? 'textarea',
+      variableHeight: resolvedColumn.variableHeight ?? true,
+      editor: resolvedColumn.editor === 'input' ? createMultilineTextEditor : resolvedColumn.editor,
+    };
+  });
+
   const tabulatorOptions = {
     layout: 'fitDataStretch' as const,
     pagination: true,
     paginationMode: 'local' as const,
     paginationSize: 50,
     selectableRows: 1,
-    columns: props.columns,
+    columns,
     data: props.data,
   };
 

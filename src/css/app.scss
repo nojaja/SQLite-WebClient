@@ -422,6 +422,9 @@ body {
 
   .tabulator-cell {
     padding: 6px 8px;
+    white-space: pre-wrap;
+    overflow: visible;
+    text-overflow: clip;
   }
 
   .tabulator-footer {

@@ -277,7 +277,12 @@ const getTabulatorHostElement = (tableId: string): HTMLElement | null => {
  * @returns Tabulator 用列定義配列
  */
 const buildTabulatorColumns = (columns: string[]) => {
-  return columns.map((column) => ({ title: column, field: column }));
+  return columns.map((column) => ({
+    title: column,
+    field: column,
+    formatter: 'textarea',
+    variableHeight: true,
+  }));
 };
 
 /**
