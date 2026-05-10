@@ -23,6 +23,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue';
+import { formatIdentifier } from '../datasetDb';
 import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import 'tabulator-tables/dist/css/tabulator.min.css';
 
@@ -30,6 +31,7 @@ defineOptions({ name: 'EditableGridPanel' });
 
 interface Props {
   gridId: string;
+  alias?: string;
   tableName?: string;
   columns: Array<{
     title: string;
@@ -56,7 +58,14 @@ const emit = defineEmits<Emits>();
 // デフォルト値の設定
 const mode = computed(() => props.mode ?? 'table-data');
 const primaryKeyField = computed(() => props.primaryKeyField ?? 'rowid');
+const tableAlias = computed(() => props.alias ?? 'main');
 const targetTableName = computed(() => props.tableName ?? 'my_table');
+const targetTableIdentifier = computed(() => {
+  if (!tableAlias.value || tableAlias.value === 'main') {
+    return formatIdentifier(targetTableName.value);
+  }
+  return `${formatIdentifier(tableAlias.value)}.${formatIdentifier(targetTableName.value)}`;
+});
 
 let tabulatorInstance: Tabulator | null = null;
 const selectedRows = ref<any[]>([]);
@@ -131,6 +140,37 @@ const toSqlLiteral = (value: unknown): string => {
   if (value === null || value === undefined) return 'NULL';
   if (typeof value === 'string') return `'${String(value).replace(/'/g, "''")}'`;
   return String(value);
+};
+
+/**
+ * 処理名: セル値同値判定
+ * 処理概要: 旧値と新値が実質的に同じかを判定する
+ * 実装理由: Tabulator編集で数値が文字列化されるケースでも未変更判定を正しく行うため
+ * @param oldValue 編集前の値
+ * @param newValue 編集後の値
+ * @returns 実質的に同じ値であれば true
+ */
+const isEquivalentCellValue = (oldValue: unknown, newValue: unknown): boolean => {
+  if (Object.is(oldValue, newValue)) return true;
+  if ((oldValue === null || oldValue === undefined) && (newValue === null || newValue === undefined)) return true;
+
+  /**
+   * 処理名: 数値・文字列ペア判定
+   * 処理概要: 数値と数値文字列の組み合わせで同値かを判定する
+   * 実装理由: Tabulator で数値が文字列に変換されるケースを未変更として扱うため
+   * @param numValue 数値候補
+   * @param strValue 文字列候補
+   * @returns 同じ数値を表すペアなら true
+   */
+  const isNumberStringPair = (numValue: unknown, strValue: unknown): boolean => {
+    if (typeof numValue !== 'number' || typeof strValue !== 'string') return false;
+    const trimmed = strValue.trim();
+    if (trimmed.length === 0) return false;
+    const parsed = Number(trimmed);
+    return !Number.isNaN(parsed) && Object.is(parsed, numValue);
+  };
+
+  return isNumberStringPair(oldValue, newValue) || isNumberStringPair(newValue, oldValue);
 };
 
 /**
@@ -211,7 +251,6 @@ const initializeTabulatorInstance = () => {
     paginationMode: 'local' as const,
     paginationSize: 50,
     selectableRows: 1,
-    cellEdited: onCellEdited,
     columns: props.columns,
     data: props.data,
   };
@@ -223,23 +262,32 @@ const initializeTabulatorInstance = () => {
   // データ変更時にdummyVersionをインクリメント
   tabulatorInstance.on('rowDeleted', () => { dummyVersion.value++; });
   tabulatorInstance.on('rowAdded', () => { dummyVersion.value++; });
-  tabulatorInstance.on('cellEdited', () => { dummyVersion.value++; });
+  tabulatorInstance.on('cellEdited', (cell: any) => {
+    dummyVersion.value++;
+    onCellEdited(cell);
+  });
 };
 
 /**
  * 処理名: セル編集完了ハンドラ
- * 処理概要: セル編集時にその行の背景色を薄いピンクに変更する
- * 実装理由: 編集状態を視覚的に表現するため
+ * 処理概要: 単表編集モードで値が変更されたセルのみ背景色を薄いピンクに変更する
+ * 実装理由: 実際に変更されたカラムだけを視覚的に判別しやすくするため
  * @param cell セルコンポーネント
  */
 const onCellEdited = (cell: any) => {
-  const row = cell.getRow?.();
-  if (row) {
-    const element = row.getElement?.();
-    if (element) {
-      element.style.backgroundColor = '#ffe0e6';
-    }
+  if (mode.value !== 'table-data') return;
+
+  const oldValue = cell.getOldValue?.();
+  const newValue = cell.getValue?.();
+  const element = cell.getElement?.();
+  if (!element) return;
+
+  if (isEquivalentCellValue(oldValue, newValue)) {
+    element.style.backgroundColor = '';
+    return;
   }
+
+  element.style.backgroundColor = '#ffe0e6';
 };
 
 /**
@@ -338,19 +386,20 @@ const generateCreateQuery = () => {
         const type = row.type || 'TEXT';
         const notNull = row.notnull ? ' NOT NULL' : '';
         const defaultVal = row.dflt_value ? ` DEFAULT ${row.dflt_value}` : '';
-        return `  ${name} ${type}${notNull}${defaultVal}`;
+        return `  ${formatIdentifier(String(name))} ${type}${notNull}${defaultVal}`;
       })
       .join(',\n');
-    query = `CREATE TABLE ${targetTableName.value} (\n${columnDefs}\n);`;
+    query = `CREATE TABLE ${targetTableIdentifier.value} (\n${columnDefs}\n);`;
   } else {
     // 単表編集モード: 現在表示中の全行（削除行を除外）を INSERT で生成
     const columns = props.columns
       .filter((col) => col.field !== primaryKeyField.value)
       .map((col) => col.field);
+    const columnIdentifiers = columns.map((col) => formatIdentifier(col));
     const currentData = tabulatorInstance.getData() as Record<string, unknown>[];
     const statements = currentData.map((row) => {
       const values = columns.map((col) => toSqlLiteral(row[col])).join(', ');
-      return `INSERT INTO ${targetTableName.value} (${columns.join(', ')}) VALUES (${values});`;
+      return `INSERT INTO ${targetTableIdentifier.value} (${columnIdentifiers.join(', ')}) VALUES (${values});`;
     });
     query = statements.join('\n');
   }
@@ -376,17 +425,19 @@ const generateUpdateQuery = () => {
         const name = row.name;
         const type = row.type || 'TEXT';
         const notNull = row.notnull ? ' NOT NULL' : '';
-        return `ALTER TABLE ${targetTableName.value} ADD COLUMN ${name} ${type}${notNull};`;
+        return `ALTER TABLE ${targetTableIdentifier.value} ADD COLUMN ${formatIdentifier(String(name))} ${type}${notNull};`;
       });
     query = alterStatements.join('\n');
   } else {
     // 単表編集モード: 追加行は INSERT、削除行は DELETE、既存行変更は UPDATE を生成
     const { columns, addedRows, updatedRows, deletedRows } = collectTableDataChanges();
+    const columnIdentifiers = columns.map((col) => formatIdentifier(col));
+    const primaryKeyIdentifier = formatIdentifier(primaryKeyField.value);
     const statements: string[] = [];
 
     addedRows.forEach((row) => {
       const values = columns.map((col) => toSqlLiteral(row[col])).join(', ');
-      statements.push(`INSERT INTO ${targetTableName.value} (${columns.join(', ')}) VALUES (${values});`);
+      statements.push(`INSERT INTO ${targetTableIdentifier.value} (${columnIdentifiers.join(', ')}) VALUES (${values});`);
     });
 
     updatedRows.forEach((row) => {
@@ -402,17 +453,17 @@ const generateUpdateQuery = () => {
       if (changedColumns.length === 0) return;
 
       const sets = changedColumns
-        .map((col) => `${col} = ${toSqlLiteral(row[col])}`)
+        .map((col) => `${formatIdentifier(col)} = ${toSqlLiteral(row[col])}`)
         .join(', ');
       statements.push(
-        `UPDATE ${targetTableName.value} SET ${sets} WHERE ${primaryKeyField.value} = ${toSqlLiteral(pkVal)};`
+        `UPDATE ${targetTableIdentifier.value} SET ${sets} WHERE ${primaryKeyIdentifier} = ${toSqlLiteral(pkVal)};`
       );
     });
 
     deletedRows.forEach((row) => {
       const pkVal = row[primaryKeyField.value];
       if (pkVal === null || pkVal === undefined) return;
-      statements.push(`DELETE FROM ${targetTableName.value} WHERE ${primaryKeyField.value} = ${toSqlLiteral(pkVal)};`);
+      statements.push(`DELETE FROM ${targetTableIdentifier.value} WHERE ${primaryKeyIdentifier} = ${toSqlLiteral(pkVal)};`);
     });
 
     query = statements.join('\n');

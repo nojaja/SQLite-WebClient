@@ -226,6 +226,142 @@ test.describe('画面構成確認', () => {
     await expect(rows).toHaveCount(beforeCount - 1);
   });
 
+  test('単表編集で編集したセルの背景がピンクになる', async ({ page }) => {
+    await page.click('#new-db-button');
+    await expandDatabaseNode(page);
+    await expandTreeGroup(page, 'Tables');
+
+    await page.locator('.tree-label.Tables[data-name="test"]').click({ button: 'right' });
+    await page.click('#db-object-edit-table-data-menu');
+
+    const targetCell = page.locator('#editable-grid-container .tabulator-row .tabulator-cell').nth(1);
+    await expect(targetCell).toBeVisible();
+
+    await targetCell.dblclick();
+    await page.keyboard.type('pink-check');
+    await page.keyboard.press('Enter');
+
+    await expect(targetCell).toHaveCSS('background-color', 'rgb(255, 224, 230)');
+  });
+
+  test('単表編集で値が変わらない編集ではセル背景がピンクにならない', async ({ page }) => {
+    await page.click('#new-db-button');
+    await expandDatabaseNode(page);
+    await expandTreeGroup(page, 'Tables');
+
+    await page.locator('.tree-label.Tables[data-name="test"]').click({ button: 'right' });
+    await page.click('#db-object-edit-table-data-menu');
+
+    const targetCell = page.locator('#editable-grid-container .tabulator-row .tabulator-cell').nth(1);
+    await expect(targetCell).toBeVisible();
+
+    const beforeValue = await targetCell.textContent();
+    const sameValue = beforeValue ?? '';
+
+    await targetCell.dblclick();
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type(sameValue);
+    await page.keyboard.press('Enter');
+
+    await expect(targetCell).not.toHaveCSS('background-color', 'rgb(255, 224, 230)');
+  });
+
+  test('単表編集で編集前が数値1のセルを未編集確定しても背景がピンクにならない', async ({ page }) => {
+    await page.click('#new-db-button');
+    await fillSqlEditor(
+      page,
+      'CREATE TABLE num_check (val INTEGER);\nINSERT INTO num_check (val) VALUES (1);'
+    );
+    await page.click('#run-button');
+    await expect(page.locator('.status-success')).toContainText('クエリ2を実行しました');
+
+    await page.click('#refresh-db-button');
+    await expandDatabaseNode(page);
+    await expandTreeGroup(page, 'Tables');
+
+    await page.locator('.tree-label.Tables[data-name="num_check"]').click({ button: 'right' });
+    await page.click('#db-object-edit-table-data-menu');
+
+    const targetCell = page.locator('#editable-grid-container .tabulator-row .tabulator-cell[tabulator-field="val"]').first();
+    await expect(targetCell).toBeVisible();
+    await expect(targetCell).toHaveText('1');
+
+    await targetCell.dblclick();
+    await page.keyboard.press('Enter');
+
+    await expect(targetCell).not.toHaveCSS('background-color', 'rgb(255, 224, 230)');
+  });
+
+  test('単表編集で数値カラムに文字を入力しても値を変更できない', async ({ page }) => {
+    await page.click('#new-db-button');
+    await fillSqlEditor(
+      page,
+      'CREATE TABLE numeric_only (val INTEGER);\nINSERT INTO numeric_only (val) VALUES (1);'
+    );
+    await page.click('#run-button');
+    await expect(page.locator('.status-success')).toContainText('クエリ2を実行しました');
+
+    await page.click('#refresh-db-button');
+    await expandDatabaseNode(page);
+    await expandTreeGroup(page, 'Tables');
+
+    await page.locator('.tree-label.Tables[data-name="numeric_only"]').click({ button: 'right' });
+    await page.click('#db-object-edit-table-data-menu');
+
+    const targetCell = page.locator('#editable-grid-container .tabulator-row .tabulator-cell[tabulator-field="val"]').first();
+    await expect(targetCell).toBeVisible();
+    await expect(targetCell).toHaveText('1');
+
+    await targetCell.dblclick();
+    await page.keyboard.type('abc');
+    await page.keyboard.press('Enter');
+
+    const cellClass = await targetCell.getAttribute('class');
+    const cellTextAfterInvalidInput = ((await targetCell.textContent()) ?? '').trim();
+    expect(
+      (cellClass ?? '').includes('tabulator-validation-fail') || cellTextAfterInvalidInput === '1'
+    ).toBeTruthy();
+
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await page.locator('#editable-grid-container .tabulator-row .tabulator-cell[tabulator-field="rowid"]').first().click();
+    await expect(targetCell).toHaveText('1');
+    await expect(targetCell).not.toHaveCSS('background-color', 'rgb(255, 224, 230)');
+  });
+
+  test('単表編集の変更クエリ生成で特殊テーブル名と日本語カラム名を正しくクォートできる', async ({ page }) => {
+    await page.click('#new-db-button');
+    await fillSqlEditor(
+      page,
+      'CREATE TABLE "results (3)" ("都道府県コード" TEXT, "和暦（年）" TEXT);\nINSERT INTO "results (3)" ("都道府県コード", "和暦（年）") VALUES (\'0\', \'8\');'
+    );
+    await page.click('#run-button');
+    await expect(page.locator('.status-success')).toContainText('クエリ2を実行しました');
+
+    await page.click('#refresh-db-button');
+    await expandDatabaseNode(page);
+    await expandTreeGroup(page, 'Tables');
+
+    await page.locator('.tree-label.Tables[data-name="results (3)"]').click({ button: 'right' });
+    await page.click('#db-object-edit-table-data-menu');
+
+    const targetCell = page.locator('#editable-grid-container .tabulator-row .tabulator-cell[tabulator-field="都道府県コード"]').first();
+    await expect(targetCell).toBeVisible();
+    await targetCell.dblclick();
+    await page.keyboard.type('1');
+    await page.keyboard.press('Enter');
+
+    const generateUpdateButton = page.locator('[id^="generate-update-query-button-"]').first();
+    await generateUpdateButton.click();
+
+    const sql = await getSqlEditorValue(page);
+    expect(sql).toContain('UPDATE "results (3)" SET "都道府県コード" = \'1\' WHERE rowid = 1;');
+
+    await page.click('#run-button');
+    await expect(page.locator('.status-error')).toHaveCount(0);
+    await expect(page.locator('.status-success')).toContainText('クエリ3を実行しました');
+  });
+
   test('単表編集で行削除後に「変更を戻す」ボタンが非活性のまま（不具合再現）', async ({ page }) => {
     await page.click('#new-db-button');
     await expandDatabaseNode(page);
@@ -345,6 +481,30 @@ test.describe('画面構成確認', () => {
 
     await expect(page.locator('#results-grid')).toContainText('111');
     await expect(page.locator('#results-grid')).toContainText('222');
+  });
+
+  test('データセット単表編集の変更クエリ生成は dataset スキーマ付きになる', async ({ page }) => {
+    await page.goto('/');
+    await page.click('#new-db-button');
+
+    await fillSqlEditor(page, 'SELECT * FROM test LIMIT 100;');
+    await page.click('#run-button');
+    await page.evaluate(() => { window.prompt = () => 'results (3)'; });
+    await page.click('#register-dataset-btn');
+    await expect(page.locator('#dataset-tree')).toContainText('results (3)');
+
+    await page.locator('.tree-label.dataset[data-name="results (3)"]').click({ button: 'right' });
+    await page.click('#db-object-edit-table-data-menu');
+
+    const targetCell = page.locator('#editable-grid-container .tabulator-row .tabulator-cell[tabulator-field="col1"]').first();
+    await expect(targetCell).toBeVisible();
+    await targetCell.dblclick();
+    await page.keyboard.type('2');
+    await page.keyboard.press('Enter');
+
+    await page.locator('[id^="generate-update-query-button-"]').first().click();
+    const sql = await getSqlEditorValue(page);
+    expect(sql).toContain('UPDATE dataset."results (3)" SET col1 = \'2\' WHERE rowid = 1;');
   });
 
   test('全てのクエリタブを閉じてから新規タブを開いても正常に動作する', async ({ page }) => {

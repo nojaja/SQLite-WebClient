@@ -108,6 +108,7 @@ import { ref, reactive, computed, nextTick, onBeforeUnmount } from 'vue';
 import MonacoEditor from 'monaco-editor-vue3';
 import * as monaco from 'monaco-editor';
 import { formatSqlText } from '../sqlFormatter';
+import { formatIdentifier } from '../datasetDb';
 import { TabulatorFull as Tabulator } from 'tabulator-tables';
 import 'tabulator-tables/dist/css/tabulator.min.css';
 import { useRowSplitter } from '../composables/useRowSplitter';
@@ -606,6 +607,41 @@ const showTableDefinition = async (alias: string, tableName: string, dbManager: 
 };
 
 /**
+ * 処理名: 数値系カラム判定
+ * 処理概要: SQLite の宣言型から数値系カラムかを判定する
+ * 実装理由: 単表編集で数値列に数値専用エディタを割り当てるため
+ * @param declaredType PRAGMA table_info の type 値
+ * @returns 数値系であれば true
+ */
+const isNumericColumnType = (declaredType: unknown): boolean => {
+  const normalizedType = String(declaredType ?? '').toUpperCase().trim();
+  if (!normalizedType) return false;
+  if (normalizedType.includes('INT')) return true;
+  if (normalizedType.includes('REAL')) return true;
+  if (normalizedType.includes('FLOA')) return true;
+  if (normalizedType.includes('DOUB')) return true;
+  if (normalizedType.includes('NUMERIC')) return true;
+  if (normalizedType.includes('DECIMAL')) return true;
+  return false;
+};
+
+/**
+ * 処理名: 数値セルバリデーション
+ * 処理概要: 入力値が数値かを判定する
+ * 実装理由: 数値系カラムで非数値や空文字の確定を防止するため
+ * @param _cell Tabulator セル（未使用）
+ * @param value 入力値
+ * @returns 数値なら true
+ */
+const validateNumericOrEmpty = (_cell: unknown, value: unknown): boolean => {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'number') return !Number.isNaN(value);
+  const trimmed = String(value).trim();
+  if (trimmed.length === 0) return false;
+  return !Number.isNaN(Number(trimmed));
+};
+
+/**
  * 処理名: テーブルデータ編集表示
  * 処理概要: 指定テーブルの全データをDBから取得して編集可能グリッドで表示する
  * 実装理由: Sidebar のテーブル右クリックメニュー「単表編集」に対応するため
@@ -616,10 +652,15 @@ const showTableDefinition = async (alias: string, tableName: string, dbManager: 
 const editTableData = async (alias: string, tableName: string, dbManager: any) => {
   try {
     // ROWIDを含めてデータ取得
-    const schemaPrefix = alias === 'main' ? '' : `${alias}.`;
-    const selectQuery = `SELECT rowid, * FROM ${schemaPrefix}${tableName}`;
+    const qualifiedTableName = alias === 'main' 
+      ? formatIdentifier(tableName)
+      : `${formatIdentifier(alias)}.${formatIdentifier(tableName)}`;
+    const selectQuery = `SELECT rowid, * FROM ${qualifiedTableName}`;
+    const schemaPrefix = alias === 'main' ? '' : `${formatIdentifier(alias)}.`;
+    const pragmaQuery = `PRAGMA ${schemaPrefix}table_info(${formatIdentifier(tableName)})`;
     
     const results = dbManager.db.exec(selectQuery);
+    const schemaResults = dbManager.db.exec(pragmaQuery);
     if (!results.length) {
       setMessages(`テーブル ${tableName} のデータ取得に失敗しました`);
       return;
@@ -627,14 +668,42 @@ const editTableData = async (alias: string, tableName: string, dbManager: any) =
 
     const columns = results[0].columns;
     const values = results[0].values;
+    const schemaRows = schemaResults[0]?.values ?? [];
+    const columnTypeMap = new Map<string, unknown>(
+      schemaRows.map((row: unknown[]) => [String(row[1]), row[2]])
+    );
 
     // Tabulator用の列定義を生成
-    const tabulatorColumns = columns.map((colName: string) => ({
-      title: colName,
-      field: colName,
-      editor: colName === 'rowid' ? undefined : 'input',
-      cssClass: colName === 'rowid' ? 'rowid-column' : ''
-    }));
+    const tabulatorColumns = columns.map((colName: string) => {
+      if (colName === 'rowid') {
+        return {
+          title: colName,
+          field: colName,
+          editor: undefined,
+          cssClass: 'rowid-column'
+        };
+      }
+
+      if (isNumericColumnType(columnTypeMap.get(colName))) {
+        return {
+          title: colName,
+          field: colName,
+          editor: 'number',
+          editorParams: {
+            step: 'any',
+          },
+          validator: validateNumericOrEmpty,
+          cssClass: ''
+        };
+      }
+
+      return {
+        title: colName,
+        field: colName,
+        editor: 'input',
+        cssClass: ''
+      };
+    });
 
     const gridData = values.map((row: unknown[]) =>
       Object.fromEntries(columns.map((col: string, idx: number) => [col, row[idx]]))

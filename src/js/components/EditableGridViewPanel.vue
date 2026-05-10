@@ -9,6 +9,7 @@
     >
       <EditableGridPanel
         :grid-id="`${tab.state.mode}-${tab.state.alias}-${tab.state.tableName}`"
+        :alias="tab.state.alias"
         :table-name="tab.state.tableName"
         :columns="tab.state.columns"
         :data="tab.state.data"

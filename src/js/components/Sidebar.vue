@@ -191,7 +191,7 @@
         テーブル定義の表示
       </button>
       <button
-        v-if="canShowTableSchemaMenu"
+        v-if="canShowEditTableDataMenu"
         id="db-object-edit-table-data-menu"
         class="context-menu-item"
         @click.stop="onEditTableDataMenuClick"
@@ -687,6 +687,7 @@ const closeDbObjectContextMenu = () => {
   canShowDdlMenu.value = false;
   canShowInsertQueryMenus.value = false;
   canShowTableSchemaMenu.value = false;
+  canShowEditTableDataMenu.value = false;
 };
 
 /**
@@ -695,6 +696,13 @@ const closeDbObjectContextMenu = () => {
  * 実装理由: テーブル定義表示と単表編集はテーブル専用機能のため
  */
 const canShowTableSchemaMenu = ref(false);
+
+/**
+ * 処理名: テーブルデータ編集メニュー表示可否判定
+ * 処理概要: DBツリーのテーブルまたはデータセットのテーブルで編集メニューを表示するか判定する
+ * 実装理由: テーブル編集はDBテーブルとデータセットテーブル両方に対応するため
+ */
+const canShowEditTableDataMenu = ref(false);
 
 /**
  * 処理名: DDLメニュー表示可否判定
@@ -718,6 +726,9 @@ const canShowInsertQueryMenus = ref(false);
 const updateContextMenuVisibilityFlags = () => {
   canShowTableSchemaMenu.value = 
     dbObjectContextMenu.source === 'database' && dbObjectContextMenu.objectType === 'table';
+  canShowEditTableDataMenu.value =
+    dbObjectContextMenu.objectType === 'table' &&
+    (dbObjectContextMenu.source === 'database' || dbObjectContextMenu.source === 'dataset');
   canShowDdlMenu.value = dbObjectContextMenu.source === 'database' && dbObjectContextMenu.objectType !== 'column';
   canShowInsertQueryMenus.value =
     dbObjectContextMenu.source === 'dataset'
