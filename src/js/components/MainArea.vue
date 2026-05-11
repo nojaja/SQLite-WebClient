@@ -9,6 +9,11 @@
         :class="{ active: tab.id === activeQueryTabId }"
         :data-tab-id="tab.id"
         @click="switchQueryTab(tab.id)"
+        draggable="true"
+        @dragstart="onQueryTabDragStart($event, tab.id)"
+        @dragover.prevent="onQueryTabDragOver($event)"
+        @drop.prevent="onQueryTabDrop(tab.id)"
+        @dragend="onQueryTabDragEnd"
       >
         {{ tab.label }}<span class="close-tab" @click.stop="closeQueryTab(tab.id)">×</span>
       </div>
@@ -47,26 +52,19 @@
       <!-- 結果タブ -->
       <div class="results-tabs">
         <div
-          v-for="tab in resultTabs"
+          v-for="tab in displayedResultTabs"
           :key="tab.id"
           class="result-tab"
           :class="{ active: tab.id === activeResultTabId }"
-          :data-results-id="tab.resultsId"
           @click="switchResultTab(tab.id)"
+          draggable="true"
+          @dragstart="onResultTabDragStart($event, tab.id)"
+          @dragover.prevent="onResultTabDragOver($event)"
+          @drop.prevent="onResultTabDrop(tab.id)"
+          @dragend="onResultTabDragEnd"
         >
           {{ tab.label }}
-          <span v-if="tab.closable" class="close-tab" @click.stop="removeResultTab(tab.id)">×</span>
-        </div>
-        <!-- 編集可能グリッドタブ -->
-        <div
-          v-for="tab in editableGridTabs"
-          :key="tab.id"
-          class="result-tab"
-          :class="{ active: activeResultTabId === tab.id }"
-          @click="switchResultTab(tab.id)"
-        >
-          {{ tab.label }}
-          <span class="close-tab" @click.stop="closeEditableGridTab(tab.id)">×</span>
+          <span v-if="tab.closable" class="close-tab" @click.stop="closeDisplayedResultTab(tab)">×</span>
         </div>
       </div>
 
@@ -97,7 +95,14 @@
         class="messages-area"
         v-show="showMessagesArea"
       >
-        <div v-for="(msg, i) in messages" :key="i">{{ msg }}</div>
+        <div class="results-toolbar">
+          <button id="messages-clear-button" class="toolbar-button" @click="clearMessages">
+            <span class="material-symbols-outlined">clear_all</span> Clear Messages
+          </button>
+        </div>
+        <div class="messages-log">
+          <div v-for="(msg, i) in messages" :key="i">{{ msg }}</div>
+        </div>
       </div>
     </div>
   </div>
@@ -120,6 +125,7 @@ const emit = defineEmits<{
   'download-csv': [];
   'run-query': [];
   'drop-query': [files: File[]];
+  'save-query': [];
 }>();
 
 defineOptions({ name: 'AppMainArea' });
@@ -135,6 +141,7 @@ const queryTabs = ref<QueryTab[]>([{ id: 'query1', label: 'Query1', query: '' }]
 const activeQueryTabId = ref('query1');
 let queryTabSerial = 2;
 const sqlEditorRef = ref<monaco.editor.IStandaloneCodeEditor | null>(null);
+const draggedQueryTabId = ref<string | null>(null);
 
 /** Monacoエディタの設定オプション */
 const monacoOptions = {
@@ -175,6 +182,72 @@ const updateActiveTabQuery = (value: string) => {
  */
 const switchQueryTab = (id: string) => {
   activeQueryTabId.value = id;
+};
+
+/**
+ * 処理名: 配列要素移動
+ * 処理概要: 配列内の要素を指定位置に移動した新配列を返す
+ * 実装理由: タブ D&D 並べ替えのロジックを共通化するため
+ * @param list 元配列
+ * @param fromId 移動元ID
+ * @param toId 移動先ID
+ * @returns 並べ替え後の配列
+ */
+const reorderById = <T extends { id: string }>(list: T[], fromId: string, toId: string): T[] => {
+  if (fromId === toId) return list;
+  const fromIndex = list.findIndex((item) => item.id === fromId);
+  const toIndex = list.findIndex((item) => item.id === toId);
+  if (fromIndex === -1 || toIndex === -1) return list;
+  const next = [...list];
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
+};
+
+/**
+ * 処理名: クエリタブドラッグ開始
+ * 処理概要: 並べ替え対象のクエリタブIDを保持する
+ * 実装理由: drop 時に移動元タブを特定するため
+ * @param e ドラッグイベント
+ * @param tabId タブID
+ */
+const onQueryTabDragStart = (e: DragEvent, tabId: string) => {
+  draggedQueryTabId.value = tabId;
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', tabId);
+  }
+};
+
+/**
+ * 処理名: クエリタブドラッグオーバー
+ * 処理概要: 並べ替え対象に move ドロップ効果を設定する
+ * 実装理由: UI フィードバックを明示するため
+ * @param e ドラッグイベント
+ */
+const onQueryTabDragOver = (e: DragEvent) => {
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+};
+
+/**
+ * 処理名: クエリタブドロップ
+ * 処理概要: クエリタブ配列を並べ替える
+ * 実装理由: タブ順を左右移動で変更できるようにするため
+ * @param targetTabId ドロップ先タブID
+ */
+const onQueryTabDrop = (targetTabId: string) => {
+  const sourceTabId = draggedQueryTabId.value;
+  if (!sourceTabId) return;
+  queryTabs.value = reorderById(queryTabs.value, sourceTabId, targetTabId);
+};
+
+/**
+ * 処理名: クエリタブドラッグ終了
+ * 処理概要: 並べ替え状態を初期化する
+ * 実装理由: 次回ドラッグ操作に前回状態を持ち越さないため
+ */
+const onQueryTabDragEnd = () => {
+  draggedQueryTabId.value = null;
 };
 
 /**
@@ -353,6 +426,13 @@ interface ResultTab {
   closable: boolean;
 }
 
+interface DisplayResultTab {
+  id: string;
+  label: string;
+  closable: boolean;
+  kind: 'result' | 'editable';
+}
+
 const resultTabs = ref<ResultTab[]>([
   { id: 'messages-tab', label: 'Messages', resultsId: 'messages-area', closable: false },
 ]);
@@ -360,6 +440,70 @@ const activeResultTabId = ref('messages-tab');
 const showResultsArea = ref(false);
 const showMessagesArea = ref(true);
 const showResultsMenuBar = ref(false);
+const resultTabOrder = ref<string[]>(['messages-tab']);
+const draggedResultTabId = ref<string | null>(null);
+
+/**
+ * 処理名: 結果タブ順序同期
+ * 処理概要: 現在存在する結果タブIDのみを順序配列へ同期する
+ * 実装理由: タブ追加/削除後に並べ替え順序の整合を維持するため
+ */
+const syncResultTabOrder = () => {
+  const allIds = [
+    ...resultTabs.value.map((tab) => tab.id),
+    ...editableGridTabs.value.map((tab) => tab.id),
+  ];
+  const existing = resultTabOrder.value.filter((id) => allIds.includes(id));
+  const additions = allIds.filter((id) => !existing.includes(id));
+  resultTabOrder.value = [...existing, ...additions];
+};
+
+/**
+ * 処理名: メッセージタブ前挿入
+ * 処理概要: 指定タブIDを Messages タブの手前に挿入する
+ * 実装理由: 新規結果/編集タブをメッセージタブより左側に並べるため
+ * @param tabId 挿入するタブID
+ */
+const insertBeforeMessagesTab = (tabId: string) => {
+  const withoutTarget = resultTabOrder.value.filter((id) => id !== tabId);
+  const messagesIndex = withoutTarget.indexOf('messages-tab');
+  if (messagesIndex === -1) {
+    resultTabOrder.value = [...withoutTarget, tabId];
+    return;
+  }
+  const next = [...withoutTarget];
+  next.splice(messagesIndex, 0, tabId);
+  resultTabOrder.value = next;
+};
+
+/**
+ * 処理名: 表示用結果タブ一覧
+ * 処理概要: 通常結果タブと編集タブを順序配列に従って統合する
+ * 実装理由: results-tabs の D&D 並べ替えを単一配列で扱うため
+ */
+const displayedResultTabs = computed<DisplayResultTab[]>(() => {
+  const tabs: DisplayResultTab[] = [
+    ...resultTabs.value.map((tab) => ({
+      id: tab.id,
+      label: tab.label,
+      closable: tab.closable,
+      kind: 'result' as const,
+    })),
+    ...editableGridTabs.value.map((tab) => ({
+      id: tab.id,
+      label: tab.label,
+      closable: true,
+      kind: 'editable' as const,
+    })),
+  ];
+
+  const tabById = new Map(tabs.map((tab) => [tab.id, tab]));
+  const orderedTabs = resultTabOrder.value
+    .map((id) => tabById.get(id))
+    .filter((tab): tab is DisplayResultTab => tab !== undefined);
+  const remainingTabs = tabs.filter((tab) => !resultTabOrder.value.includes(tab.id));
+  return [...orderedTabs, ...remainingTabs];
+});
 
 /**
  * 処理名: 結果タブ切り替え
@@ -369,17 +513,90 @@ const showResultsMenuBar = ref(false);
  */
 const switchResultTab = (id: string) => {
   activeResultTabId.value = id;
-  const tab = resultTabs.value.find(t => t.id === id);
-  if (!tab) return;
-  if (tab.label === 'Messages') {
+  if (id === 'messages-tab') {
     showResultsArea.value = false;
     showMessagesArea.value = true;
     showResultsMenuBar.value = false;
-  } else {
+    return;
+  }
+
+  if (id.startsWith('editable-grid-tab-')) {
+    showResultsArea.value = true;
+    showMessagesArea.value = false;
+    showResultsMenuBar.value = false;
+    return;
+  }
+
+  if (resultTabs.value.some((tab) => tab.id === id)) {
     showResultsArea.value = true;
     showMessagesArea.value = false;
     showResultsMenuBar.value = true;
+  } else {
+    switchResultTab('messages-tab');
   }
+};
+
+/**
+ * 処理名: 結果タブドラッグ開始
+ * 処理概要: 並べ替え対象の結果タブIDを保持する
+ * 実装理由: drop 時に移動元タブを特定するため
+ * @param e ドラッグイベント
+ * @param tabId タブID
+ */
+const onResultTabDragStart = (e: DragEvent, tabId: string) => {
+  draggedResultTabId.value = tabId;
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', tabId);
+  }
+};
+
+/**
+ * 処理名: 結果タブドラッグオーバー
+ * 処理概要: 並べ替え対象に move ドロップ効果を設定する
+ * 実装理由: UI フィードバックを明示するため
+ * @param e ドラッグイベント
+ */
+const onResultTabDragOver = (e: DragEvent) => {
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+};
+
+/**
+ * 処理名: 結果タブドロップ
+ * 処理概要: 結果タブ順序配列を並べ替える
+ * 実装理由: 結果タブ群を左右移動で並べ替え可能にするため
+ * @param targetTabId ドロップ先タブID
+ */
+const onResultTabDrop = (targetTabId: string) => {
+  const sourceTabId = draggedResultTabId.value;
+  if (!sourceTabId || sourceTabId === targetTabId) return;
+  const order = resultTabOrder.value;
+  if (!order.includes(sourceTabId) || !order.includes(targetTabId)) return;
+  resultTabOrder.value = reorderById(order.map((id) => ({ id })), sourceTabId, targetTabId).map((item) => item.id);
+};
+
+/**
+ * 処理名: 結果タブドラッグ終了
+ * 処理概要: 並べ替え状態を初期化する
+ * 実装理由: 次回ドラッグ操作に前回状態を持ち越さないため
+ */
+const onResultTabDragEnd = () => {
+  draggedResultTabId.value = null;
+};
+
+/**
+ * 処理名: 表示タブクローズ
+ * 処理概要: 表示用タブの種別に応じて削除処理を振り分ける
+ * 実装理由: 統合タブ描画で通常結果/編集タブを同じUIから閉じるため
+ * @param tab 表示タブ情報
+ */
+const closeDisplayedResultTab = (tab: DisplayResultTab) => {
+  if (!tab.closable) return;
+  if (tab.kind === 'editable') {
+    closeEditableGridTab(tab.id);
+    return;
+  }
+  removeResultTab(tab.id);
 };
 
 /**
@@ -395,6 +612,7 @@ const removeResultTab = (id: string) => {
   resultGridData.delete(tab.resultsId);
   const idx = resultTabs.value.findIndex(t => t.id === id);
   resultTabs.value.splice(idx, 1);
+  syncResultTabOrder();
   const remaining = resultTabs.value.filter(t => t.closable);
   switchResultTab(remaining.length > 0 ? remaining[0].id : 'messages-tab');
 };
@@ -415,6 +633,8 @@ const addResultTab = (label: string, tableId: string) => {
   } else {
     resultTabs.value.push(tab);
   }
+  syncResultTabOrder();
+  insertBeforeMessagesTab(id);
   switchResultTab(id);
 };
 
@@ -427,6 +647,7 @@ const clearResultTabs = () => {
   destroyAllTabulatorInstances();
   resultTabs.value.filter(t => t.closable).forEach(t => resultGridData.delete(t.resultsId));
   resultTabs.value = resultTabs.value.filter(t => t.id === 'messages-tab');
+  syncResultTabOrder();
   showResultsArea.value = false;
   showMessagesArea.value = true;
   showResultsMenuBar.value = false;
@@ -495,6 +716,9 @@ const openEditableGridTab = (state: EditableGridState): void => {
     editableGridTabs.value.push({ id, label, state });
   }
 
+  syncResultTabOrder();
+  insertBeforeMessagesTab(id);
+
   showResultsArea.value = true;
   showMessagesArea.value = false;
   showResultsMenuBar.value = false;
@@ -512,6 +736,7 @@ const closeEditableGridTab = (id: string) => {
   if (index === -1) return;
 
   editableGridTabs.value.splice(index, 1);
+  syncResultTabOrder();
 
   if (activeResultTabId.value === id) {
     const fallback = editableGridTabs.value[editableGridTabs.value.length - 1];
@@ -539,11 +764,10 @@ const closeEditableGridTab = (id: string) => {
  */
 const showTableDefinition = async (alias: string, tableName: string, dbManager: any) => {
   try {
-    // PRAGMA table_info(tableName) でテーブルスキーマを取得
-    const schemaPrefix = alias === 'main' ? '' : `${alias}.`;
-    const results = dbManager.db.exec(
-      `PRAGMA ${schemaPrefix ? `${alias}.` : ''}table_info(${tableName})`
-    );
+    const schemaPrefix = alias === 'main' ? '' : `${formatIdentifier(alias)}.`;
+    const pragmaTable = formatIdentifier(tableName);
+    const results = dbManager.db.exec(`PRAGMA ${schemaPrefix}table_info(${pragmaTable})`);
+    const foreignKeyResults = dbManager.db.exec(`PRAGMA ${schemaPrefix}foreign_key_list(${pragmaTable})`);
     
     if (!results.length || !results[0].values) {
       setMessages(`テーブル ${tableName} のスキーマ取得に失敗しました`);
@@ -559,6 +783,12 @@ const showTableDefinition = async (alias: string, tableName: string, dbManager: 
       dflt_value: row[4],
       pk: row[5]
     }));
+
+    const foreignKeyColumnNames = new Set(
+      (foreignKeyResults[0]?.values ?? [])
+        .map((row: unknown[]) => row[3])
+        .filter((name): name is string => typeof name === 'string' && name.length > 0)
+    );
 
     // Tabulator用の列定義を生成
     const tabulatorColumns = [
@@ -585,6 +815,28 @@ const showTableDefinition = async (alias: string, tableName: string, dbManager: 
           falseValue: false,
         },
       },
+      {
+        title: 'PK',
+        field: 'isPk',
+        formatter: 'tickCross',
+        editor: 'tickCross',
+        hozAlign: 'center',
+        editorParams: {
+          trueValue: true,
+          falseValue: false,
+        },
+      },
+      {
+        title: 'FK',
+        field: 'isFk',
+        formatter: 'tickCross',
+        editor: 'tickCross',
+        hozAlign: 'center',
+        editorParams: {
+          trueValue: true,
+          falseValue: false,
+        },
+      },
       { title: 'Default', field: 'dflt_value', editor: 'input' },
       { title: 'Comment', field: 'comment', editor: 'input' }
     ];
@@ -593,6 +845,8 @@ const showTableDefinition = async (alias: string, tableName: string, dbManager: 
       name: col.name,
       type: col.type || 'TEXT',
       notnull: col.notnull === 1,
+      isPk: Number(col.pk) > 0,
+      isFk: foreignKeyColumnNames.has(String(col.name)),
       dflt_value: col.dflt_value,
       comment: '',
       cid: col.cid,
@@ -788,6 +1042,15 @@ const setMessages = (msg: string | string[]) => {
   messages.value = Array.isArray(msg) ? msg : [msg];
 };
 
+/**
+ * 処理名: メッセージクリア
+ * 処理概要: Messages タブに表示中のメッセージを全消去する
+ * 実装理由: Messages ツールバーのクリアボタン要件に対応するため
+ */
+const clearMessages = () => {
+  messages.value = [];
+};
+
 // ---- 結果グリッドデータ管理 ----
 /**
  * 処理名: 結果グリッドデータ設定
@@ -835,6 +1098,15 @@ const runQueryShortcut = () => {
 };
 
 /**
+ * 処理名: クエリ保存ショートカット処理
+ * 処理概要: Ctrl+S で Save Query イベントを発火する
+ * 実装理由: エディタ上での保存ショートカット要件に対応するため
+ */
+const saveQueryShortcut = () => {
+  emit('save-query');
+};
+
+/**
  * 処理名: 位置指定テキスト挿入
  * 処理概要: ツリー項目のドロップ時にアクティブタブ末尾へテキストを追記する
  * 実装理由: Monaco の executeEdits を直接呼ぶと Language Worker が起動し
@@ -862,6 +1134,15 @@ const onEditorMounted = (editor: monaco.editor.IStandaloneCodeEditor) => {
     label: 'Run Query',
     keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
     run: runQueryShortcut,
+  });
+  editor.addAction({
+    id: 'save-query-shortcut',
+    label: 'Save Query',
+    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
+    run: saveQueryShortcut,
+  });
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space, () => {
+    editor.trigger('keyboard', 'editor.action.triggerSuggest', {});
   });
   editor.addAction({
     id: 'format-document-menu',
@@ -1064,6 +1345,8 @@ onBeforeUnmount(() => {
   destroyAllTabulatorInstances();
 });
 
+syncResultTabOrder();
+
 defineExpose({
   addQueryTab,
   closeQueryTab,
@@ -1080,5 +1363,6 @@ defineExpose({
   editTableData,
   formatQuery,
   runFormatMenuAction,
+  clearMessages,
 });
 </script>

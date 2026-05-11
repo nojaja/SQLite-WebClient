@@ -23,6 +23,7 @@
                 @drop-datasets="handleDatasetTreeDrop"
                 @append-query="handleAppendQuery"
                 @show-ddl="handleShowDdl"
+                @show-ddl-bulk="handleShowBulkDdl"
                 @show-table-definition="handleShowTableDefinition"
                 @edit-table-data="handleEditTableData"
             />
@@ -33,6 +34,7 @@
                 @download-csv="handleDownloadCsv"
                 @run-query="handleRunQuery"
                 @drop-query="handleQueryEditorDrop"
+                @save-query="handleSaveQuery"
             />
         </div>
         <StatusBar ref="statusBarRef" />
@@ -701,6 +703,35 @@ const handleShowDdl = async (payload: { alias: string; name: string; objectType:
         showSuccess(`CREATE文を挿入しました: ${payload.alias}.${payload.name}`);
     } catch (e) {
         showError(`CREATE文挿入失敗: ${(e as Error).message}`);
+    }
+};
+
+/**
+ * 処理名: CREATE文一括表示ハンドラ
+ * 処理概要: 指定スキーマの全テーブル CREATE 文をエディタ末尾へまとめて追記する
+ * 実装理由: Tables コンテキストメニュー「Create文の一括表示」に対応するため
+ * @param payload 一括取得対象情報
+ * @param payload.alias 対象DBエイリアス
+ */
+const handleShowBulkDdl = async (payload: { alias: string }) => {
+    try {
+        const dbInst = await getDb();
+        const schema = dbInst.getDatabaseSchema(payload.alias);
+        const tableNames = schema.tables ?? [];
+        if (tableNames.length === 0) {
+            showError(`一括表示対象のテーブルがありません: ${payload.alias}`);
+            return;
+        }
+
+        const ddls = tableNames.map((tableName) => {
+            const ddl = dbInst.getSchemaObjectDdl(payload.alias, 'table', tableName).trim();
+            return ddl.endsWith(';') ? ddl : `${ddl};`;
+        });
+
+        mainAreaRef.value?.appendActiveQuery(ddls.join('\n\n'));
+        showSuccess(`CREATE文を一括表示しました: ${payload.alias} (${tableNames.length} tables)`);
+    } catch (e) {
+        showError(`CREATE文の一括表示に失敗: ${(e as Error).message}`);
     }
 };
 

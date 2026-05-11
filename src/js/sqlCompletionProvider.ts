@@ -214,7 +214,7 @@ export function updateDbObjectSuggestions(
  */
 export function registerSqlCompletionProvider(): monaco.IDisposable {
   return monaco.languages.registerCompletionItemProvider('sql', {
-    triggerCharacters: [' ', '\n', '\t', '.', '('],
+    triggerCharacters: ['\t', '.', '('],
 
     /**
      * 処理名: 補完候補提供

@@ -54,6 +54,7 @@
                   :class="`${group.title}-root`"
                   style="cursor:pointer"
                   @click="toggleGroupNode(schema.alias, group.title)"
+                  @contextmenu.prevent="onGroupContextMenu($event, schema.alias, group.title)"
                 >
                   <span class="material-symbols-outlined toggle-icon">
                     {{ groupNodeOpen[`${schema.alias}__${group.title}`] ? 'expand_more' : 'chevron_right' }}
@@ -239,6 +240,22 @@
         Delete文の挿入
       </button>
     </div>
+
+    <div
+      v-if="groupContextMenu.visible"
+      id="group-context-menu"
+      class="context-menu"
+      :style="{ left: `${groupContextMenu.x}px`, top: `${groupContextMenu.y}px` }"
+    >
+      <button
+        v-if="canShowGroupBulkDdlMenu"
+        id="group-show-bulk-ddl-menu"
+        class="context-menu-item"
+        @click.stop="onShowGroupBulkDdlMenuClick"
+      >
+        Create文の一括表示
+      </button>
+    </div>
   </div>
 </template>
 
@@ -258,9 +275,18 @@ const emit = defineEmits<{
   'drop-datasets': [files: File[]];
   'append-query': [query: string];
   'show-ddl': [payload: { alias: string; name: string; objectType: DbObjectType }];
+  'show-ddl-bulk': [payload: { alias: string }];
   'show-table-definition': [payload: { alias: string; tableName: string }];
   'edit-table-data': [payload: { alias: string; tableName: string }];
 }>();
+
+interface GroupContextMenu {
+  visible: boolean;
+  x: number;
+  y: number;
+  alias: string;
+  groupTitle: string;
+}
 
 type DbObjectType = 'table' | 'view' | 'index' | 'trigger' | 'column';
 type QueryInsertMenuAction = 'select' | 'update' | 'insert' | 'delete';
@@ -691,6 +717,69 @@ const closeDbObjectContextMenu = () => {
 };
 
 /**
+ * 処理名: グループコンテキストメニュー表示状態
+ * 処理概要: グループ右クリック時のメニュー表示座標と対象グループ情報を保持する
+ * 実装理由: Tables グループから一括 CREATE 表示を呼び出すため
+ */
+const groupContextMenu = reactive<GroupContextMenu>({
+  visible: false,
+  x: 0,
+  y: 0,
+  alias: '',
+  groupTitle: '',
+});
+
+/**
+ * 処理名: グループコンテキストメニュー表示可否判定
+ * 処理概要: グループコンテキストメニュー表示用フラグ
+ * 実装理由: Tables グループのみ一括 CREATE 表示を提供するため
+ */
+const canShowGroupBulkDdlMenu = ref(false);
+
+/**
+ * 処理名: グループコンテキストメニュー表示
+ * 処理概要: グループ右クリック時にコンテキストメニューを開く
+ * 実装理由: テーブルグループレベルでメニュー操作を提供するため
+ * @param e マウスイベント
+ * @param alias DB エイリアス
+ * @param groupTitle グループ名
+ */
+const onGroupContextMenu = (e: MouseEvent, alias: string, groupTitle: string) => {
+  groupContextMenu.visible = true;
+  groupContextMenu.x = e.clientX;
+  groupContextMenu.y = e.clientY;
+  groupContextMenu.alias = alias;
+  groupContextMenu.groupTitle = groupTitle;
+  canShowGroupBulkDdlMenu.value = groupTitle === 'Tables';
+};
+
+/**
+ * 処理名: グループコンテキストメニュー閉じる
+ * 処理概要: 表示中のグループコンテキストメニューを閉じる
+ * 実装理由: メニュー操作完了後やメニュー外クリック時のクリーンアップ
+ */
+const closeGroupContextMenu = () => {
+  groupContextMenu.visible = false;
+  canShowGroupBulkDdlMenu.value = false;
+};
+
+/**
+ * 処理名: グループ一括 DDL 表示メニュー選択
+ * 処理概要: Tables グループ右クリック時に全テーブル CREATE 文をまとめて挿入する
+ * 実装理由: 対象スキーマの全 CREATE 文を効率的に表示するため
+ */
+const onShowGroupBulkDdlMenuClick = () => {
+  if (groupContextMenu.groupTitle !== 'Tables') {
+    closeGroupContextMenu();
+    return;
+  }
+  emit('show-ddl-bulk', {
+    alias: groupContextMenu.alias,
+  });
+  closeGroupContextMenu();
+};
+
+/**
  * 処理名: テーブルスキーマメニュー表示可否判定
  * 処理概要: 現在の右クリック対象がテーブルで、DBツリーのテーブル操作が可能か判定する
  * 実装理由: テーブル定義表示と単表編集はテーブル専用機能のため
@@ -733,6 +822,7 @@ const updateContextMenuVisibilityFlags = () => {
   canShowInsertQueryMenus.value =
     dbObjectContextMenu.source === 'dataset'
     || dbObjectContextMenu.objectType === 'table'
+    || dbObjectContextMenu.objectType === 'view'
     || dbObjectContextMenu.objectType === 'column';
 };
 
@@ -908,6 +998,7 @@ const onInsertQueryMenuClick = (action: QueryInsertMenuAction) => {
 const onWindowKeydown = (e: KeyboardEvent) => {
   if (e.key === 'Escape') {
     closeDbObjectContextMenu();
+    closeGroupContextMenu();
   }
 };
 
