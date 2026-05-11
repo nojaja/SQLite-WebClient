@@ -329,6 +329,7 @@ body {
   font-size: 13px;
   display: flex;
   align-items: center;
+  user-select: none;
 
   &.active {
     background-color: $color-white;
@@ -376,6 +377,7 @@ body {
 .result-tab {
   padding: 5px 15px;
   cursor: pointer;
+  user-select: none;
 
   &.active {
     border-bottom: 2px solid $color-accent;
@@ -629,9 +631,13 @@ body {
 // ============================================================
 .messages-area {
   flex: 1;
-  padding: 8px;
+  padding: 0;
   overflow: auto;
   font-size: 13px;
+}
+
+.messages-log {
+  padding: 8px;
 }
 
 // ============================================================
