@@ -32,7 +32,8 @@ interface Sqlite3OoDb {
 
 /** sqlite3 WASM CAPI サブセット */
 interface Sqlite3Capi {
-  sqlite3_js_vfs_create_file: (vfs: string, name: string, data: Uint8Array, size: number) => void;
+  sqlite3_js_posix_create_file?: (name: string, data: Uint8Array, size?: number) => void;
+  sqlite3_js_vfs_create_file?: (vfs: string, name: string, data: Uint8Array, size: number) => void;
   sqlite3_js_db_export: (db: Sqlite3OoDb) => Uint8Array;
   sqlite3_bind_parameter_index: (ptr: unknown, name: string) => number;
 }
@@ -101,6 +102,7 @@ class SQLiteManager {
         }
       });
     } else { // ブラウザ環境
+      SQLiteManager.ensureOpfsDisableFlagForNonIsolatedContext();
       sqlite3 = await (init as unknown as (opts: Record<string, unknown>) => Promise<Sqlite3Instance>)({
         print: options.print || (() => { }),
         printErr: options.printErr || (() => { })
@@ -128,6 +130,47 @@ class SQLiteManager {
   }
 
   /**
+   * OPFS 抑止フラグ付与
+   *
+   * 非 cross-origin isolated 環境で SQLite WASM が OPFS 初期化を試みると
+   * SharedArrayBuffer 不足警告が出るため、URL パラメータで明示的に抑止する。
+   */
+  private static ensureOpfsDisableFlagForNonIsolatedContext() {
+    if (typeof window === 'undefined') return;
+    if (window.crossOriginIsolated) return;
+    try {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has('opfs-disable')) {
+        url.searchParams.set('opfs-disable', '1');
+        window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+      }
+    } catch {
+      // URL 解析不可環境では抑止不可だが、アプリ継続を優先する。
+    }
+  }
+
+  /**
+   * DB ファイル作成
+   *
+   * Uint8Array を SQLite 側の仮想ファイルとして登録する。
+   * 新しい POSIX API を優先し、旧 API は後方互換のためにのみ利用する。
+   *
+   * @param filename 登録する DB ファイル名
+   * @param data DB バイナリ
+   */
+  private createDbFile(filename: string, data: Uint8Array) {
+    if (this.sqlite3.capi.sqlite3_js_posix_create_file) {
+      this.sqlite3.capi.sqlite3_js_posix_create_file(filename, data, data.length);
+      return;
+    }
+    if (this.sqlite3.capi.sqlite3_js_vfs_create_file) {
+      this.sqlite3.capi.sqlite3_js_vfs_create_file('unix', filename, data, data.length);
+      return;
+    }
+    throw new Error('利用可能な SQLite ファイル作成 API が見つかりません');
+  }
+
+  /**
    * SQLite 実行環境を作成し、prepare/exec の拡張を再設定する。
    * @param data 初期化に使うデータベース内容
    * @returns Promise that resolves when setup is complete
@@ -136,7 +179,7 @@ class SQLiteManager {
     // ファイル名生成
     this.currentFilename = 'dbfile_' + ((0xffffffff * Math.random()) >>> 0);
     if (data && data.length) {
-      this.sqlite3.capi.sqlite3_js_vfs_create_file('unix', this.currentFilename, data, data.length);
+      this.createDbFile(this.currentFilename, data);
     }
     // データベースを作成
     this.db = new this.sqlite3.oo1.DB(this.currentFilename, 'c');
@@ -340,7 +383,7 @@ class SQLiteManager {
     SQLiteManager._validateAlias(alias);
     const filename = `attached_${alias}_${((0xffffffff * Math.random()) >>> 0)}`;
     if (data && data.length) {
-      this.sqlite3.capi.sqlite3_js_vfs_create_file('unix', filename, data, data.length);
+      this.createDbFile(filename, data);
     }
     this.original.db.exec.call(this.db, { sql: `ATTACH DATABASE '${filename}' AS "${alias}"` });
     this._attachedFiles[alias] = filename;

@@ -695,6 +695,10 @@ const handleAppendQuery = (query: string) => {
  * @param payload.objectType 対象オブジェクト種別
  */
 const handleShowDdl = async (payload: { alias: string; name: string; objectType: 'table' | 'view' | 'index' | 'trigger' }) => {
+    if (!payload?.alias || !payload?.name || !payload?.objectType) {
+        showError('CREATE文表示の対象情報が不正です');
+        return;
+    }
     try {
         const dbInst = await getDb();
         const ddl = dbInst.getSchemaObjectDdl(payload.alias, payload.objectType, payload.name);
@@ -714,6 +718,10 @@ const handleShowDdl = async (payload: { alias: string; name: string; objectType:
  * @param payload.alias 対象DBエイリアス
  */
 const handleShowBulkDdl = async (payload: { alias: string }) => {
+    if (!payload?.alias) {
+        showError('一括表示の対象情報が不正です');
+        return;
+    }
     try {
         const dbInst = await getDb();
         const schema = dbInst.getDatabaseSchema(payload.alias);
@@ -744,6 +752,10 @@ const handleShowBulkDdl = async (payload: { alias: string }) => {
  * @param payload.tableName テーブル名
  */
 const handleShowTableDefinition = async (payload: { alias: string; tableName: string }) => {
+    if (!payload?.alias || !payload?.tableName) {
+        showError('テーブル定義表示の対象情報が不正です');
+        return;
+    }
     try {
         const dbInst = await getDb();
         mainAreaRef.value?.showTableDefinition(payload.alias, payload.tableName, dbInst);
@@ -762,6 +774,10 @@ const handleShowTableDefinition = async (payload: { alias: string; tableName: st
  * @param payload.tableName テーブル名
  */
 const handleEditTableData = async (payload: { alias: string; tableName: string }) => {
+    if (!payload?.alias || !payload?.tableName) {
+        showError('テーブル編集表示の対象情報が不正です');
+        return;
+    }
     try {
         const dbInst = await getDb();
         mainAreaRef.value?.editTableData(payload.alias, payload.tableName, dbInst);
