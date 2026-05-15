@@ -102,7 +102,6 @@ class SQLiteManager {
         }
       });
     } else { // ブラウザ環境
-      SQLiteManager.ensureOpfsDisableFlagForNonIsolatedContext();
       sqlite3 = await (init as unknown as (opts: Record<string, unknown>) => Promise<Sqlite3Instance>)({
         print: options.print || (() => { }),
         printErr: options.printErr || (() => { })
@@ -129,25 +128,7 @@ class SQLiteManager {
     this._attachedFiles = {};
   }
 
-  /**
-   * OPFS 抑止フラグ付与
-   *
-   * 非 cross-origin isolated 環境で SQLite WASM が OPFS 初期化を試みると
-   * SharedArrayBuffer 不足警告が出るため、URL パラメータで明示的に抑止する。
-   */
-  private static ensureOpfsDisableFlagForNonIsolatedContext() {
-    if (typeof window === 'undefined') return;
-    if (window.crossOriginIsolated) return;
-    try {
-      const url = new URL(window.location.href);
-      if (!url.searchParams.has('opfs-disable')) {
-        url.searchParams.set('opfs-disable', '1');
-        window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
-      }
-    } catch {
-      // URL 解析不可環境では抑止不可だが、アプリ継続を優先する。
-    }
-  }
+
 
   /**
    * DB ファイル作成
